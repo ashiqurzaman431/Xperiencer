@@ -1288,7 +1288,7 @@ function openScheduleSheet(id=null){
   // focus removed - unreliable on mobile
 }
 
-function saveSchedule(){
+async function saveSchedule(){
   const title=document.getElementById('sc-title').value.trim();
   if(!title){showToast('Enter a title');return;}
   const date=document.getElementById('sc-date').value;
@@ -1315,7 +1315,7 @@ function saveSchedule(){
   showToast(editingSc?'Schedule updated':'Schedule added');
 }
 
-function deleteSchedule(){
+async function deleteSchedule(){
   if(!editingSc)return;
   schedules=schedules.filter(s=>s.id!==editingSc);
   await driveSaveData();
@@ -1391,10 +1391,10 @@ function renderRoutine(){
     `<div style="font-size:12px;color:var(--text-sec)">${done}/${todayRoutines.length} done today</div>`;
 }
 
-function toggleRoutine(id,ds){
+async function toggleRoutine(id,ds){
   const key=id+'_'+ds;
   completions[key]=!completions[key];
-  LS.set('ll_completions',completions);
+  await driveSaveData();
   renderRoutine();
 }
 
@@ -1428,7 +1428,7 @@ function openRoutineSheet(){
   // focus removed - unreliable on mobile
 }
 
-function saveRoutine(){
+async function saveRoutine(){
   const title=document.getElementById('rt-title').value.trim();
   if(!title){showToast('Enter a title');return;}
   const time=document.getElementById('rt-time').value;
@@ -1443,7 +1443,7 @@ function saveRoutine(){
   }
   const r={id:uid(),title,time,dur,repeatType:rtType,days,dates};
   routines.push(r);
- await driveSaveData();
+  await driveSaveData();
   document.getElementById('routine-overlay').classList.remove('open');
   renderRoutine();renderSchStrip();renderCalView();
   showToast('Routine saved');
@@ -1654,22 +1654,23 @@ function ndEdit(){
   setTimeout(()=>openEventSheet(id), 320);
 }
 
-function ndDuplicate(){
+async function ndDuplicate(){
   document.getElementById('nd-dropdown').classList.remove('open');
   const src = events.find(x => x.id === ndEventId);
   if(!src) return;
   const copy = Object.assign({}, src, {id: uid(), title: src.title + ' (copy)'});
   events.unshift(copy);
-  LS.set('ll_events', events);
+  await driveSaveData();
   closeNoteDetail();
   renderEvents();
   showToast('Event duplicated');
 }
 
-function ndDelete(){
+async function ndDelete(){
   if(!ndEventId) return;
+  driveDeleteCover(ndEventId);
   events = events.filter(e => e.id !== ndEventId);
-  LS.set('ll_events', events);
+  await driveSaveData();
   closeNoteDetail();
   renderEvents(); renderCalView();
   showToast('Event deleted');
