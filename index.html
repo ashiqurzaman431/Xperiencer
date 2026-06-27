@@ -1597,6 +1597,29 @@ function signOut(){
   document.getElementById('login-screen').classList.remove('hidden');
 }
 
+function reconnectGoogle(){
+  driveTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPES,
+    callback: async (tokenResponse) => {
+      if(tokenResponse.error){ showToast('Reconnect failed: ' + tokenResponse.error); return; }
+      driveAccessToken = tokenResponse.access_token;
+      document.getElementById('reconnect-banner').style.display = 'none';
+      showToast('Reconnected! Loading your data…');
+      await driveInit();
+      const data = await driveLoadLatestData();
+      if(data){
+        events      = data.events      || [];
+        schedules   = data.schedules   || [];
+        routines    = data.routines    || [];
+        completions = data.completions || {};
+      }
+      renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView();
+    }
+  });
+  driveTokenClient.requestAccessToken();
+}
+
 // Enter key shortcuts
 document.getElementById('ev-title').addEventListener('keydown',e=>{if(e.key==='Enter')saveEvent();});
 document.getElementById('sc-title').addEventListener('keydown',e=>{if(e.key==='Enter')saveSchedule();});
@@ -1742,11 +1765,23 @@ async function ndAutoSave(){
 // INIT
 // ══════════════════════════════════════
 if(getAuthMode() === 'google'){
-  // Re-entry after page reload: must sign in again to get fresh token
-  // (tokens are not stored — user taps Google button again)
-  // So just show the login screen as normal.
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('reconnect-banner').style.display = 'block';
+  schSelDate = todayStr();
+  calSelDate = todayStr();
+  selectState('future');
+  selectRtType('day');
+  renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView();
+} else if(getAuthMode() === 'guest'){
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').style.display = 'flex';
+  schSelDate = todayStr();
+  calSelDate = todayStr();
+  selectState('future');
+  selectRtType('day');
+  renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView();
 }
-// Login screen stays visible until user taps a login button.
 
 // ══════════════════════════════════════
 // PWA: SERVICE WORKER REGISTRATION
