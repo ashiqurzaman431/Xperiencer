@@ -12,6 +12,8 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js" async defer></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -709,12 +711,17 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 
 <script>
 // ══════════════════════════════════════
-// STORAGE
+// GOOGLE CONFIG
 // ══════════════════════════════════════
-const LS = {
-  get(k,d){try{return JSON.parse(localStorage.getItem(k))||d}catch{return d}},
-  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
-};
+const GOOGLE_CLIENT_ID = '787576428605-c5f1tccfclupnnd9og87j9g8kapio4vs.apps.googleusercontent.com';
+const GOOGLE_API_KEY   = 'AIzaSyDeA7wNouqNYmSlDwddGNcUtQ7zh7F80z0';
+const DRIVE_FOLDER_NAME = 'Xperiencer Data';
+const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
+const MAX_DATA_FILES = 100;
+
+let driveAccessToken = null;
+let driveFolderId    = null;
+let driveTokenClient = null;
 
 // ══════════════════════════════════════
 // AUTH / LOGIN GATE
