@@ -80,11 +80,8 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .card-meta{font-size:10px;color:var(--text-dim);display:flex;align-items:center;gap:4px}
 .card-meta svg{width:11px;height:11px}
 .card-tag{font-size:10px;font-weight:700;background:var(--lime-dim);color:var(--lime);padding:2px 8px;border-radius:20px}
-.ev-hcard.has-cover .ev-title{color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.7)}
-.ev-hcard.has-cover .ev-body{color:rgba(255,255,255,.8)}
-.ev-hcard.has-cover .ev-time-lbl{color:rgba(255,255,255,.7)}
-.ev-hcard.has-cover .ev-tags .ev-tag{background:rgba(0,0,0,.35);color:#fff}
-.ev-cover-dim{position:absolute;inset:0;background:rgba(0,0,0,.45);border-radius:inherit;pointer-events:none}
+.ev-card-cover{width:calc(100% + 40px);height:120px;margin:-20px -20px 14px -20px;border-radius:18px 18px 0 0;overflow:hidden;flex-shrink:0}
+.ev-card-cover img{width:100%;height:100%;object-fit:cover;display:block}
 .ev-hcard{border-radius:18px;padding:18px;margin-bottom:14px;cursor:pointer;position:relative;overflow:hidden;display:flex;flex-direction:column;gap:8px;min-height:200px;transition:transform .15s}
   
 /* ── Section label ── */
@@ -1105,11 +1102,13 @@ function renderEvents(){
       if(diff===-1) return 'Yesterday';
       return e.date+(e.time?' · '+fmtTime(e.time):'');
     })():'';
-    const bgStyle = coverCache[e.id]
-      ? `style="background-image:url('${coverCache[e.id]}');background-size:cover;background-position:center"`
+    const coverHtml = e.hasCover
+      ? `<div class="ev-card-cover" id="cover-strip-${e.id}">
+          <img src="${coverCache[e.id]||''}" style="object-position:center ${(e.coverPosition||50)}%">
+         </div>`
       : '';
-    return `<div class="ev-hcard ${skin}${e.hasCover?' has-cover':''}" ${bgStyle} onclick="openNoteDetail('${e.id}')">
-      ${e.hasCover?`<div class="ev-cover-dim"></div>`:''}
+    return `<div class="ev-hcard ${skin}" onclick="openNoteDetail('${e.id}')">
+      ${coverHtml}
       <button class="ev-action" onclick="event.stopPropagation();openNoteDetail('${e.id}')">${actionIcons[e.state]||actionIcons.future}</button>
       <div class="ev-icon">${cardIcons[e.state]||cardIcons.future}</div>
       <div class="ev-title">${esc(e.title)}</div>
@@ -1128,11 +1127,10 @@ function renderEvents(){
       driveLoadCover(e.id).then(dataUrl => {
         if(!dataUrl) return;
         coverCache[e.id] = dataUrl;
-        const cardEl = el.querySelector(`[onclick*="openNoteDetail('${e.id}')"]`);
-        if(cardEl){
-          cardEl.style.backgroundImage = `url('${dataUrl}')`;
-          cardEl.style.backgroundSize = 'cover';
-          cardEl.style.backgroundPosition = 'center';
+        const stripEl = document.getElementById(`cover-strip-${e.id}`);
+        if(stripEl){
+          const imgEl = stripEl.querySelector('img');
+          if(imgEl) imgEl.src = dataUrl;
         }
       });
     }
