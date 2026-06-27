@@ -1160,10 +1160,10 @@ async function saveEvent(){
     state:evState,date,time,dur,tag:document.getElementById('ev-tag').value.trim()};
   if(editingEv){events=events.map(e=>e.id===editingEv?obj:e);}
   else events.unshift(obj);
-  await driveSaveData();
   document.getElementById('event-overlay').classList.remove('open');
   renderEvents(); renderCalView();
   showToast(editingEv?'Event updated':'Event saved');
+  driveSaveData();
 }
 
 async function deleteEvent(){
@@ -1312,10 +1312,10 @@ async function saveSchedule(){
   const obj={id:editingSc||uid(),title,date,time,dur,notes:document.getElementById('sc-notes').value.trim()};
   if(editingSc){schedules=schedules.map(s=>s.id===editingSc?obj:s);}
   else schedules.push(obj);
-  await driveSaveData();
   document.getElementById('sch-overlay').classList.remove('open');
   renderSchStrip();renderSchedule();renderCalView();
   showToast(editingSc?'Schedule updated':'Schedule added');
+  driveSaveData();
 }
 
 async function deleteSchedule(){
@@ -1446,10 +1446,10 @@ async function saveRoutine(){
   }
   const r={id:uid(),title,time,dur,repeatType:rtType,days,dates};
   routines.push(r);
-  await driveSaveData();
   document.getElementById('routine-overlay').classList.remove('open');
   renderRoutine();renderSchStrip();renderCalView();
   showToast('Routine saved');
+  driveSaveData();
 }
 
 // ══════════════════════════════════════
