@@ -1133,7 +1133,7 @@ function selectState(s){
   });
 }
 
-function saveEvent(){
+async function saveEvent(){
   const title=document.getElementById('ev-title').value.trim();
   if(!title){showToast('Enter a title');return;}
   const date=document.getElementById('ev-date').value;
@@ -1157,16 +1157,16 @@ function saveEvent(){
     state:evState,date,time,dur,tag:document.getElementById('ev-tag').value.trim()};
   if(editingEv){events=events.map(e=>e.id===editingEv?obj:e);}
   else events.unshift(obj);
-  LS.set('ll_events',events);
+  await driveSaveData();
   document.getElementById('event-overlay').classList.remove('open');
   renderEvents(); renderCalView();
   showToast(editingEv?'Event updated':'Event saved');
 }
 
-function deleteEvent(){
+async function deleteEvent(){
   if(!editingEv)return;
   events=events.filter(e=>e.id!==editingEv);
-  LS.set('ll_events',events);
+  await driveSaveData();
   document.getElementById('event-overlay').classList.remove('open');
   renderEvents(); renderCalView();
   showToast('Event deleted');
@@ -1309,7 +1309,7 @@ function saveSchedule(){
   const obj={id:editingSc||uid(),title,date,time,dur,notes:document.getElementById('sc-notes').value.trim()};
   if(editingSc){schedules=schedules.map(s=>s.id===editingSc?obj:s);}
   else schedules.push(obj);
-  LS.set('ll_schedules',schedules);
+  await driveSaveData();
   document.getElementById('sch-overlay').classList.remove('open');
   renderSchStrip();renderSchedule();renderCalView();
   showToast(editingSc?'Schedule updated':'Schedule added');
@@ -1318,7 +1318,7 @@ function saveSchedule(){
 function deleteSchedule(){
   if(!editingSc)return;
   schedules=schedules.filter(s=>s.id!==editingSc);
-  LS.set('ll_schedules',schedules);
+  await driveSaveData();
   document.getElementById('sch-overlay').classList.remove('open');
   renderSchStrip();renderSchedule();renderCalView();
   showToast('Schedule deleted');
@@ -1443,7 +1443,7 @@ function saveRoutine(){
   }
   const r={id:uid(),title,time,dur,repeatType:rtType,days,dates};
   routines.push(r);
-  LS.set('ll_routines',routines);
+ await driveSaveData();
   document.getElementById('routine-overlay').classList.remove('open');
   renderRoutine();renderSchStrip();renderCalView();
   showToast('Routine saved');
@@ -1701,7 +1701,7 @@ function ndShowCover(dataUrl){
   }
 }
 
-function ndAutoSave(){
+async function ndAutoSave(){
   if(!ndEventId) return;
   const titleEl = document.getElementById('nd-note-title');
   const bodyEl  = document.getElementById('nd-note-body');
@@ -1711,7 +1711,7 @@ function ndAutoSave(){
     ? Object.assign({}, e, {title: newTitle || e.title, body: newBody})
     : e
   );
-  LS.set('ll_events', events);
+  await driveSaveData();
   renderEvents();
 }
 
