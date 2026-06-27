@@ -1719,6 +1719,7 @@ function ndShowCover(dataUrl){
   }
 }
 
+let ndAutoSaveTimer = null;
 async function ndAutoSave(){
   if(!ndEventId) return;
   const titleEl = document.getElementById('nd-note-title');
@@ -1729,8 +1730,9 @@ async function ndAutoSave(){
     ? Object.assign({}, e, {title: newTitle || e.title, body: newBody})
     : e
   );
-  await driveSaveData();
   renderEvents();
+  clearTimeout(ndAutoSaveTimer);
+  ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
 }
 
 // ══════════════════════════════════════
