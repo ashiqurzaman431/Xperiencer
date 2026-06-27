@@ -391,7 +391,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
   <div class="login-title">Xperiencer</div>
   <div class="login-tagline">Every moment, noted. Every day, remembered.</div>
   <div class="login-btns">
-    <button class="login-btn login-btn-google" onclick="loginGoogleStub()">
+    <button class="login-btn login-btn-google" onclick="loginWithGoogle()">
       <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l5.7-5.7C34.6 6.5 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 16 18.9 13 24 13c3.1 0 5.8 1.1 8 3l5.7-5.7C34.6 7.5 29.6 5 24 5c-7.8 0-14.5 4.4-17.7 10.7z"/><path fill="#4CAF50" d="M24 44c5.4 0 10.2-2 13.9-5.4l-6.4-5.3C29.4 35 26.8 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.6 5.1C9.5 39.6 16.1 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.9 2.5-2.6 4.6-4.7 6.1l6.4 5.3C40.7 36.6 44 31 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
       Continue with Google
     </button>
@@ -728,9 +728,28 @@ let driveTokenClient = null;
 // ══════════════════════════════════════
 function getAuthMode(){ return localStorage.getItem('ll_authMode'); }
 
-function enterApp(){
+async function enterApp(){
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').style.display='flex';
+  if(driveAccessToken){
+    showToast('Loading your data…');
+    const data = await driveLoadLatestData();
+    if(data){
+      events      = data.events      || [];
+      schedules   = data.schedules   || [];
+      routines    = data.routines    || [];
+      completions = data.completions || {};
+    }
+  }
+  schSelDate = todayStr();
+  calSelDate = todayStr();
+  selectState('future');
+  selectRtType('day');
+  renderEvents();
+  renderSchStrip();
+  renderSchedule();
+  renderRoutine();
+  renderCalView();
 }
 
 function loginAsGuest(){
@@ -738,19 +757,169 @@ function loginAsGuest(){
   enterApp();
 }
 
-function loginGoogleStub(){
-  // Google sign-in is not wired up yet — stub for now.
-  showToast('Google sign-in coming soon — try Guest mode for now');
+function loginWithGoogle(){
+  driveTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPES,
+    callback: async (tokenResponse) => {
+      if(tokenResponse.error){ showToast('Sign-in failed: ' + tokenResponse.error); return; }
+      driveAccessToken = tokenResponse.access_token;
+      localStorage.setItem('ll_authMode','google');
+      showToast('Signed in! Setting up Drive…');
+      await driveInit();
+      enterApp();
+    }
+  });
+  driveTokenClient.requestAccessToken();
+}
+
+// ══════════════════════════════════════
+// DRIVE FUNCTIONS
+// ══════════════════════════════════════
+async function driveInit(){
+  // Find or create the Xperiencer Data folder
+  const searchRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
+    { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+  );
+  const searchData = await searchRes.json();
+  if(searchData.files && searchData.files.length > 0){
+    driveFolderId = searchData.files[0].id;
+  } else {
+    const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' })
+    });
+    const createData = await createRes.json();
+    driveFolderId = createData.id;
+  }
+}
+
+function driveFileName(){
+  const n = new Date();
+  const pad = x => String(x).padStart(2,'0');
+  return `Xperiencer Data.${n.getFullYear()}.${pad(n.getMonth()+1)}.${pad(n.getDate())}.${pad(n.getHours())}.${pad(n.getMinutes())}.${pad(n.getSeconds())}.json`;
+}
+
+async function driveSaveData(){
+  if(!driveAccessToken || !driveFolderId) return;
+  const payload = JSON.stringify({ events, schedules, routines, completions });
+  const fileName = driveFileName();
+  // Upload new data file
+  const meta = { name: fileName, parents: [driveFolderId] };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+  form.append('file', new Blob([payload], { type: 'application/json' }));
+  await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + driveAccessToken },
+    body: form
+  });
+  // Prune: keep only latest 100 data files
+  await drivePruneOldFiles();
+}
+
+async function drivePruneOldFiles(){
+  const listRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name contains 'Xperiencer Data.' and mimeType='application/json' and trashed=false&orderBy=name desc&fields=files(id,name)&pageSize=200`,
+    { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+  );
+  const listData = await listRes.json();
+  const files = listData.files || [];
+  // files are sorted newest first (by name desc, which works because of timestamp format)
+  if(files.length > MAX_DATA_FILES){
+    const toDelete = files.slice(MAX_DATA_FILES);
+    for(const f of toDelete){
+      await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer ' + driveAccessToken }
+      });
+    }
+  }
+}
+
+async function driveLoadLatestData(){
+  if(!driveAccessToken || !driveFolderId) return null;
+  const listRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name contains 'Xperiencer Data.' and mimeType='application/json' and trashed=false&orderBy=name desc&fields=files(id,name)&pageSize=1`,
+    { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+  );
+  const listData = await listRes.json();
+  if(!listData.files || !listData.files.length) return null;
+  const latest = listData.files[0];
+  const fileRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${latest.id}?alt=media`,
+    { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+  );
+  return await fileRes.json();
+}
+
+// Cover image Drive functions
+async function driveUploadCover(eventId, dataUrl){
+  if(!driveAccessToken || !driveFolderId) return;
+  // Convert base64 dataUrl to blob
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  const fileName = `cover_${eventId}.jpg`;
+  // Check if cover already exists for this event, delete it first
+  await driveDeleteCover(eventId);
+  const meta = { name: fileName, parents: [driveFolderId] };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+  form.append('file', blob);
+  await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + driveAccessToken },
+    body: form
+  });
+}
+
+async function driveDeleteCover(eventId){
+  if(!driveAccessToken || !driveFolderId) return;
+  const fileName = `cover_${eventId}.jpg`;
+  const listRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name='${fileName}' and trashed=false&fields=files(id)`,
+    { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+  );
+  const listData = await listRes.json();
+  if(listData.files && listData.files.length){
+    await fetch(`https://www.googleapis.com/drive/v3/files/${listData.files[0].id}`, {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer ' + driveAccessToken }
+    });
+  }
+}
+
+async function driveLoadCover(eventId){
+  if(!driveAccessToken || !driveFolderId) return null;
+  const fileName = `cover_${eventId}.jpg`;
+  const listRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name='${fileName}' and trashed=false&fields=files(id)`,
+    { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+  );
+  const listData = await listRes.json();
+  if(!listData.files || !listData.files.length) return null;
+  const fileId = listData.files[0].id;
+  const imgRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+    { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+  );
+  const blob = await imgRes.blob();
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result);
+    reader.readAsDataURL(blob);
+  });
 }
 
 // ══════════════════════════════════════
 // STATE
 // ══════════════════════════════════════
-let events    = LS.get('ll_events', []);
-let schedules = LS.get('ll_schedules', []);
-let routines  = LS.get('ll_routines', []);
-let completions = LS.get('ll_completions', {}); // {routineId_dateStr: true}
-
+let events      = [];
+let schedules   = [];
+let routines    = [];
+let completions = {};
 let curView   = 'events';
 let eTab      = 'all';
 let editingEv = null;
@@ -1549,15 +1718,12 @@ function ndAutoSave(){
 // ══════════════════════════════════════
 // INIT
 // ══════════════════════════════════════
-schSelDate=todayStr();
-calSelDate=todayStr();
-selectState('future');
-selectRtType('day');
-renderEvents();
-
-if(getAuthMode()){
-  enterApp();
-} // else: login screen stays visible, app remains hidden until loginAsGuest() runs
+if(getAuthMode() === 'google'){
+  // Re-entry after page reload: must sign in again to get fresh token
+  // (tokens are not stored — user taps Google button again)
+  // So just show the login screen as normal.
+}
+// Login screen stays visible until user taps a login button.
 
 // ══════════════════════════════════════
 // PWA: SERVICE WORKER REGISTRATION
