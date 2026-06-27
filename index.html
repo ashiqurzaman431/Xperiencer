@@ -1687,8 +1687,7 @@ async function ndDelete(){
   if(!ndEventId) return;
   driveDeleteCover(ndEventId);
   events = events.filter(e => e.id !== ndEventId);
-  driveDeleteCover(ndEventId); // fire and forget, no await needed
-  await driveSaveData();
+  driveSaveData();
   closeNoteDetail();
   renderEvents(); renderCalView();
   showToast('Event deleted');
