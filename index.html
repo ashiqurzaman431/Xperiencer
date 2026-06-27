@@ -644,7 +644,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <button class="nd-back" onclick="closeNoteDetail()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
     </button>
-    <span class="nd-title-lbl">Add Note</span>
+<span class="nd-title-lbl" id="nd-title-lbl">Add Note</span>
     <div class="nd-menu-wrap">
       <button class="nd-menu-btn" onclick="toggleNdMenu(event)" id="nd-menu-btn">
         <svg viewBox="0 0 4 18" fill="currentColor"><circle cx="2" cy="2" r="2"/><circle cx="2" cy="9" r="2"/><circle cx="2" cy="16" r="2"/></svg>
@@ -1665,6 +1665,7 @@ function openNoteDetail(id){
   if(!e) return;
   ndEventId = id;
   document.getElementById('nd-icon').innerHTML = ndIcons[e.state] || ndIcons.future;
+  document.getElementById('nd-title-lbl').textContent = e.title || 'Add Note';
   document.getElementById('nd-note-title').textContent = e.title || '';
   document.getElementById('nd-note-body').textContent = e.body || '';
   // attach auto-save listeners (remove old ones first)
