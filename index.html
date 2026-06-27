@@ -1624,9 +1624,14 @@ function openNoteDetail(id){
   }
   document.getElementById('nd-meta-row').innerHTML = metaHtml;
   document.getElementById('nd-dropdown').classList.remove('open');
-  // restore cover
-  const covers = LS.get('ll_covers',{});
-  ndShowCover(covers[id]||null);
+// restore cover — load from Drive asynchronously
+  ndShowCover(null); // clear any previous cover immediately
+  const evWithCover = events.find(x => x.id === id);
+  if(evWithCover && evWithCover.hasCover){
+    driveLoadCover(id).then(dataUrl => {
+      if(dataUrl && ndEventId === id) ndShowCover(dataUrl);
+    });
+  }
   document.getElementById('note-detail').classList.add('open');
 }
 
@@ -1670,22 +1675,23 @@ async function ndDelete(){
   if(!ndEventId) return;
   driveDeleteCover(ndEventId);
   events = events.filter(e => e.id !== ndEventId);
+  driveDeleteCover(ndEventId); // fire and forget, no await needed
   await driveSaveData();
   closeNoteDetail();
   renderEvents(); renderCalView();
   showToast('Event deleted');
 }
 
-function ndSetCover(input){
+async function ndSetCover(input){
   if(!input.files||!input.files[0]||!ndEventId) return;
   const reader = new FileReader();
-  reader.onload = function(e){
+  reader.onload = async function(e){
     const dataUrl = e.target.result;
-    // store cover per event in localStorage
-    const covers = LS.get('ll_covers',{});
-    covers[ndEventId] = dataUrl;
-    LS.set('ll_covers', covers);
-    ndShowCover(dataUrl);
+    ndShowCover(dataUrl); // show immediately in UI
+    // Mark event as having a cover
+    events = events.map(ev => ev.id === ndEventId ? Object.assign({}, ev, {hasCover: true}) : ev);
+    await driveUploadCover(ndEventId, dataUrl);
+    await driveSaveData();
   };
   reader.readAsDataURL(input.files[0]);
   input.value='';
