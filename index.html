@@ -656,6 +656,11 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
           <input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:0" onchange="ndSetCover(this);document.getElementById('nd-dropdown').classList.remove('open')">
         </div>
         <div class="nd-drop-divider"></div>
+        <button class="nd-drop-item" id="nd-remove-cover-btn" onclick="ndRemoveCover()" style="display:none">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          Remove cover
+        </button>
+        <div class="nd-drop-divider"></div>
         <button class="nd-drop-item" onclick="ndEdit()">
           <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           Edit event
@@ -679,6 +684,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div class="nd-cover" id="nd-cover" style="width:calc(100% + 48px);margin:-8px -24px 18px -24px;border-radius:0">
       <img id="nd-cover-img" src="" alt="cover">
       <div class="nd-cover-gradient"></div>
+      <div style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:rgba(255,255,255,.5);pointer-events:none;letter-spacing:.05em;white-space:nowrap">DRAG TO REPOSITION</div>
       <div class="nd-cover-btn" style="position:relative;overflow:hidden">
         <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Change
@@ -1687,6 +1693,8 @@ function openNoteDetail(id){
   }
   document.getElementById('nd-meta-row').innerHTML = metaHtml;
   document.getElementById('nd-dropdown').classList.remove('open');
+  document.getElementById('nd-remove-cover-btn').style.display =
+    (e && e.hasCover) ? 'block' : 'none';
 // restore cover — load from Drive asynchronously
   ndShowCover(null); // clear any previous cover immediately
   const evWithCover = events.find(x => x.id === id);
@@ -1762,6 +1770,22 @@ async function ndSetCover(input){
 let coverDragStartY = null;
 let coverDragStartPos = 50;
 let coverDragTimer = null;
+
+async function ndRemoveCover(){
+  if(!ndEventId) return;
+  document.getElementById('nd-dropdown').classList.remove('open');
+  driveDeleteCover(ndEventId);
+  delete coverCache[ndEventId];
+  events = events.map(ev => ev.id === ndEventId
+    ? Object.assign({}, ev, {hasCover: false, coverPosition: null})
+    : ev
+  );
+  ndShowCover(null);
+  document.getElementById('nd-remove-cover-btn').style.display = 'none';
+  driveSaveData();
+  renderEvents();
+  showToast('Cover removed');
+}
 
 function ndShowCover(dataUrl){
   const coverEl = document.getElementById('nd-cover');
