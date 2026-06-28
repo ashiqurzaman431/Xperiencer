@@ -560,8 +560,8 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <input class="inp" id="ev-tag" placeholder="#life #work #health…">
     <div class="field-label">Status</div>
     <div class="state-row">
-      <button id="st-open" class="state-btn" onclick="selectState('open')">Open</button>
-      <button id="st-closed" class="state-btn" onclick="selectState('closed')">Closed</button>
+      <button id="st-open" class="state-btn" onclick="'open')">Open</button>
+      <button id="st-closed" class="state-btn" onclick="'closed')">Closed</button>
     </div>
     <div id="ev-conflict-box"></div>
     <button class="sheet-btn" onclick="saveEvent()">Save Event</button>
@@ -1182,6 +1182,20 @@ function selectState(s){
   document.getElementById('st-closed').className='state-btn'+(s==='closed'?' sel-past':'');
 }
 
+function toggleOpenState(){
+  if(!ndEventId) return;
+  const ev = events.find(x => x.id === ndEventId);
+  if(!ev) return;
+  const newState = (ev.openState || 'open') === 'open' ? 'closed' : 'open';
+  events = events.map(e => e.id === ndEventId
+    ? Object.assign({}, e, {openState: newState})
+    : e
+  );
+  renderEvents();
+  openNoteDetail(ndEventId);
+  driveSaveData();
+}  
+  
 async function saveEvent(){
   const title=document.getElementById('ev-title').value.trim();
   if(!title){showToast('Enter a title');return;}
@@ -1697,8 +1711,14 @@ function openNoteDetail(id){
   document.getElementById('nd-tags').innerHTML = tags.length
     ? tags.map(t=>`<span class="nd-tag">#${esc(t.replace(/^#/,''))}</span>`).join('')
     : '';
-  const stateLbl = {past:'Done',present:'Ongoing',future:'Upcoming'}[e.state]||'';
-  let metaHtml = `<span class="nd-state-badge ${e.state}">${stateLbl}</span>`;
+  const timeState = calcTimeState(e.date);
+  const openState = e.openState || 'open';
+  let metaHtml = '';
+  if(timeState){
+    const timeLbls = {past:'Past',present:'Present',future:'Future'};
+    metaHtml += `<span class="nd-state-badge ${timeState}">${timeLbls[timeState]}</span>`;
+  }
+  metaHtml += `<span class="nd-state-badge" onclick="toggleOpenState()" style="cursor:pointer;background:${openState==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${openState==='closed'?'var(--red)':'var(--green)'};font-weight:800">${openState==='closed'?'Closed':'Open'}</span>`;
   if(e.date){
     metaHtml += `<span class="nd-meta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${friendlyDate(e.date)}</span>`;
   }
