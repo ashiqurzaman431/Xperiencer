@@ -159,7 +159,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .nd-note-body h4{font-size:15px;font-weight:700;color:var(--text-sec);margin:10px 0 4px}
 .nd-note-body h5{font-size:13px;font-weight:700;color:var(--text-sec);margin:8px 0 4px}
 .nd-note-body h6{font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px}
-.nd-note-body hr{border:none;border-top:2px solid var(--border);margin:20px 0;opacity:.6}
+.nd-note-body hr{border:none;border-top:1px solid var(--border);margin:16px 0}
 .nd-note-body ul{padding-left:20px;margin:6px 0}
 .nd-note-body ol{padding-left:20px;margin:6px 0}
 .nd-note-body li{margin:4px 0;color:var(--text-sec);font-size:16px;line-height:1.6}
@@ -183,26 +183,6 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 /* ── Heading separator ── */
 .nd-heading-sep{margin:14px 0 6px}
 .nd-heading-sep-date{font-size:10px;color:var(--text-dim);margin-top:2px}
-
-/* ── Column System ── */
-.nd-col-wrapper{display:flex;flex-direction:column;gap:0;width:100%}
-.nd-col-section{width:100%;margin-bottom:16px}
-.nd-col-section-label{font-size:9px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;padding:4px 0 6px;border-bottom:1px solid var(--border);margin-bottom:10px}
-.nd-col-section-body{min-height:48px;outline:none;font-size:16px;color:var(--text-sec);line-height:1.7;width:100%}
-.nd-col-section-body:empty::before{content:attr(data-placeholder);color:var(--text-dim);pointer-events:none}
-
-/* Inside columns: stay side by side, parent scrolls horizontally */
-.nd-inner-cols{display:flex;flex-direction:row;gap:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;margin-bottom:16px}
-.nd-inner-cols::-webkit-scrollbar{display:none}
-.nd-inner-col{min-width:180px;flex:1;background:var(--bg-card2);border:1px solid var(--border);border-radius:12px;padding:12px;position:relative}
-.nd-inner-col-label{font-size:9px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
-.nd-inner-col-body{min-height:40px;outline:none;font-size:14px;color:var(--text-sec);line-height:1.6;width:100%}
-.nd-inner-col-body:empty::before{content:'Write here…';color:var(--text-dim);pointer-events:none}
-.nd-col-add-btn{font-size:10px;font-weight:700;color:var(--text-dim);background:none;border:1px dashed var(--border);border-radius:8px;padding:4px 10px;cursor:pointer;margin-top:6px}
-.nd-col-add-btn:hover{color:var(--lime);border-color:var(--lime)}
-
-/* Column divider ends a column layout */
-.nd-col-divider{border:none;border-top:2px dashed var(--border);margin:20px 0;opacity:.5}
   
 /* ── Event Horizontal Cards ── */
 .ev-scroll{overflow-x:auto;overflow-y:hidden;display:flex;gap:14px;padding:4px 20px 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
@@ -1755,7 +1735,7 @@ function openNoteDetail(id){
   document.getElementById('nd-title-lbl').textContent = e.title || 'Add Note';
   document.getElementById('nd-note-title').textContent = e.title || '';
   document.getElementById('nd-note-body').innerHTML = e.body || '';
-  setTimeout(()=>{ ndBindTodos(); ndBindColBodies(); }, 0);
+ setTimeout(()=>ndBindTodos(), 0);
   // attach auto-save listeners (remove old ones first)
   const titleEl = document.getElementById('nd-note-title');
   const bodyEl  = document.getElementById('nd-note-body');
@@ -2019,12 +1999,6 @@ const SLASH_ITEMS = [
   {id:'hsep1',label:'H1 Separator',icon:'H1',desc:'With timestamp'},
   {id:'hsep2',label:'H2 Separator',icon:'H2',desc:'With timestamp'},
   {id:'hsep3',label:'H3 Separator',icon:'H3',desc:'With timestamp'},
-  {section:'Columns'},
-  {id:'col2',label:'2 Columns',    icon:'▌▌', desc:'Side by side'},
-  {id:'col3',label:'3 Columns',    icon:'▌▌▌',desc:'Three sections'},
-  {id:'col4',label:'4 Columns',    icon:'||||',desc:'Four sections'},
-  {id:'col5',label:'5 Columns',    icon:'|||||',desc:'Five sections'},
-  {id:'innercol',label:'Inside Column',icon:'⊞',desc:'Column within column'},
 ];
 
 let slashMenuOpen = false;
@@ -2193,11 +2167,6 @@ function applySlashItem(id){
       document.execCommand('insertHTML', false, ndMakeTodo(''));
       setTimeout(()=>ndBindTodos(), 0);
       break;
-    case 'col2': ndInsertColumns(2); break;
-    case 'col3': ndInsertColumns(3); break;
-    case 'col4': ndInsertColumns(4); break;
-    case 'col5': ndInsertColumns(5); break;
-    case 'innercol': ndInsertInnerColumns(); break;
   }
   ndAutoSave();
 }
@@ -2288,81 +2257,6 @@ function applyListType(type){
     listTypeMenuTarget.style.listStyleType = type;
   }
   ndAutoSave();
-}
-
-function ndInsertColumns(count){
-  const colsHtml = Array.from({length:count}, (_,i) =>
-    `<div class="nd-col-section">
-      <div class="nd-col-section-label">Column ${i+1}</div>
-      <div class="nd-col-section-body" contenteditable="true" data-placeholder="Write in column ${i+1}…"></div>
-    </div>`
-  ).join('');
-  const html = `<div class="nd-col-wrapper" contenteditable="false">${colsHtml}</div><p><br></p>`;
-  document.execCommand('insertHTML', false, html);
-  setTimeout(()=>ndBindColBodies(), 0);
-  ndAutoSave();
-}
-
-function ndInsertInnerColumns(){
-  // Check how many main columns are already present to respect the max-5 rule
-  const body = document.getElementById('nd-note-body');
-  const mainCols = body.querySelectorAll('.nd-col-wrapper').length;
-  const maxInner = Math.max(1, 5 - mainCols);
-  // Default to 2 inside columns, capped by limit
-  const count = Math.min(2, maxInner);
-  if(count < 1){ showToast('Column limit reached (max 5 total)'); return; }
-  const innerHtml = Array.from({length:count}, (_,i) =>
-    `<div class="nd-inner-col">
-      <div class="nd-inner-col-label">Col ${i+1}</div>
-      <div class="nd-inner-col-body" contenteditable="true"></div>
-      ${i === count-1 ? `<button class="nd-col-add-btn" onclick="ndAddInnerCol(this)">+ Col</button>` : ''}
-    </div>`
-  ).join('');
-  const html = `<div class="nd-inner-cols" contenteditable="false">${innerHtml}</div><p><br></p>`;
-  document.execCommand('insertHTML', false, html);
-  setTimeout(()=>ndBindColBodies(), 0);
-  ndAutoSave();
-}
-
-function ndAddInnerCol(btn){
-  const wrapper = btn.closest('.nd-inner-cols');
-  if(!wrapper) return;
-  const body = document.getElementById('nd-note-body');
-  const totalCols = body.querySelectorAll('.nd-col-wrapper').length + body.querySelectorAll('.nd-inner-cols').length;
-  const currentInner = wrapper.querySelectorAll('.nd-inner-col').length;
-  if(currentInner >= (5 - totalCols + 1)){
-    showToast('Column limit reached');
-    return;
-  }
-  const newCol = document.createElement('div');
-  newCol.className = 'nd-inner-col';
-  newCol.innerHTML = `<div class="nd-inner-col-label">Col ${currentInner+1}</div>
-    <div class="nd-inner-col-body" contenteditable="true"></div>`;
-  btn.before(newCol);
-  ndBindColBodies();
-  ndAutoSave();
-}
-
-function ndBindColBodies(){
-  document.querySelectorAll('.nd-col-section-body, .nd-inner-col-body').forEach(el => {
-    el.oninput = () => ndAutoSave();
-    el.onkeydown = (ev) => {
-      if(ev.ctrlKey || ev.metaKey){
-        if(ev.key==='b'){ev.preventDefault();document.execCommand('bold');}
-        if(ev.key==='i'){ev.preventDefault();document.execCommand('italic');}
-        if(ev.key==='u'){ev.preventDefault();document.execCommand('underline');}
-      }
-      if(ev.key==='Tab'){
-        ev.preventDefault();
-        // Move focus to next column
-        const allBodies = [...document.querySelectorAll('.nd-col-section-body, .nd-inner-col-body')];
-        const idx = allBodies.indexOf(el);
-        if(idx > -1 && idx < allBodies.length - 1){
-          allBodies[idx+1].focus();
-        }
-      }
-    };
-  });
 }
   
 // ══════════════════════════════════════
