@@ -1738,6 +1738,7 @@ async function ndDelete(){
   if(!ndEventId) return;
   driveDeleteCover(ndEventId);
   events = events.filter(e => e.id !== ndEventId);
+  driveDeleteCover(ndEventId); // fire and forget, no await needed
   driveSaveData();
   closeNoteDetail();
   renderEvents(); renderCalView();
@@ -1750,18 +1751,14 @@ async function ndSetCover(input){
   reader.onload = async function(e){
     const dataUrl = e.target.result;
     ndShowCover(dataUrl); // show immediately in UI
-    // Mark event as having a cover and cache it immediately
-    const evId = ndEventId;
-    coverCache[evId] = dataUrl;
-    events = events.map(ev => ev.id === evId ? Object.assign({}, ev, {hasCover: true}) : ev);
-    renderEvents(); // update cards immediately with cached cover
-    await driveUploadCover(evId, dataUrl);
+    // Mark event as having a cover
+    events = events.map(ev => ev.id === ndEventId ? Object.assign({}, ev, {hasCover: true}) : ev);
+    await driveUploadCover(ndEventId, dataUrl);
     await driveSaveData();
   };
   reader.readAsDataURL(input.files[0]);
   input.value='';
 }
-
 function ndShowCover(dataUrl){
   const coverEl = document.getElementById('nd-cover');
   const imgEl   = document.getElementById('nd-cover-img');
