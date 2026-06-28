@@ -550,12 +550,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <input class="inp" id="ev-title" placeholder="What happened / is happening / will happen?">
     <div class="field-label">Description</div>
     <textarea class="inp" id="ev-body" placeholder="Details…" rows="3"></textarea>
-    <div class="field-label">State</div>
-    <div class="state-row">
-      <button class="state-btn" id="st-past"    onclick="selectState('past')">✓ Past</button>
-      <button class="state-btn" id="st-present" onclick="selectState('present')">● Present</button>
-      <button class="state-btn" id="st-future"  onclick="selectState('future')">◎ Future</button>
-    </div>
+    
     <div class="field-label">Date</div>
     <input class="inp" id="ev-date" type="date">
     <div class="field-label">Time & Duration</div>
@@ -1157,7 +1152,6 @@ function openEventSheet(id=null){
   document.getElementById('ev-tag').value=e?e.tag:'';
   document.getElementById('ev-conflict-box').innerHTML='';
   document.getElementById('ev-delete-btn').style.display=id?'block':'none';
-  selectState(e?e.state:'future');
   document.getElementById('event-overlay').classList.add('open');
   // focus removed - unreliable on mobile
 }
