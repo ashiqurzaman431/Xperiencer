@@ -313,7 +313,11 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 .sheet-btn:active{opacity:.88}
 .sheet-btn.danger{background:var(--red-dim);color:var(--red);margin-top:10px}
 .divider{height:1px;background:var(--border);margin:16px 0}
-
+<div class="field-label">Status</div>
+<div class="state-row">
+    <button id="st-open" class="state-btn" onclick="selectState('open')">Open</button>
+    <button id="st-closed" class="state-btn" onclick="selectState('closed')">Closed</button>
+  </div>
 /* Conflict alert */
 .conflict-box{background:var(--red-dim);border:1px solid rgba(232,76,61,.3);border-radius:12px;padding:14px;margin-top:12px}
 .conflict-title{font-size:12px;font-weight:800;color:var(--red);margin-bottom:10px}
@@ -1152,15 +1156,15 @@ function openEventSheet(id=null){
   document.getElementById('ev-tag').value=e?e.tag:'';
   document.getElementById('ev-conflict-box').innerHTML='';
   document.getElementById('ev-delete-btn').style.display=id?'block':'none';
+  selectState(e ? (e.openState || 'open') : 'open');
   document.getElementById('event-overlay').classList.add('open');
   // focus removed - unreliable on mobile
 }
 
 function selectState(s){
   evState=s;
-  ['past','present','future'].forEach(x=>{
-    document.getElementById('st-'+x).className='state-btn'+(s===x?' sel-'+x:'');
-  });
+  document.getElementById('st-open').className='state-btn'+(s==='open'?' sel-present':'');
+  document.getElementById('st-closed').className='state-btn'+(s==='closed'?' sel-past':'');
 }
 
 async function saveEvent(){
