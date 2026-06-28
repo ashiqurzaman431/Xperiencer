@@ -2104,6 +2104,104 @@ function hideSlashOnClickOutside(e){
   if(menu && !menu.contains(e.target)) hideSlashMenu();
 }
 
+function applySlashItem(id){
+  hideSlashMenu();
+  const bodyEl = document.getElementById('nd-note-body');
+  bodyEl.focus();
+
+  // Delete the slash character that triggered the menu
+  if(slashAnchorRange){
+    const sel = window.getSelection();
+    const cur = sel.rangeCount ? sel.getRangeAt(0) : null;
+    // Delete from slash to current position
+    if(cur){
+      try{
+        const delRange = document.createRange();
+        delRange.setStart(slashAnchorRange.startContainer, slashAnchorRange.startOffset);
+        delRange.setEnd(cur.startContainer, cur.startOffset);
+        delRange.deleteContents();
+        sel.collapse(delRange.startContainer, delRange.startOffset);
+      } catch(e){}
+    }
+  }
+
+  const now = new Date();
+  const pad = x=>String(x).padStart(2,'0');
+  const dateStr = `${now.getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()]} ${now.getFullYear()}`;
+  const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const stamp = `${dateStr}, ${timeStr}`;
+
+  switch(id){
+    case 'bold':        document.execCommand('bold'); break;
+    case 'italic':      document.execCommand('italic'); break;
+    case 'underline':   document.execCommand('underline'); break;
+    case 'strikethrough': document.execCommand('strikeThrough'); break;
+    case 'h1': document.execCommand('formatBlock',false,'h1'); break;
+    case 'h2': document.execCommand('formatBlock',false,'h2'); break;
+    case 'h3': document.execCommand('formatBlock',false,'h3'); break;
+    case 'h4': document.execCommand('formatBlock',false,'h4'); break;
+    case 'h5': document.execCommand('formatBlock',false,'h5'); break;
+    case 'h6': document.execCommand('formatBlock',false,'h6'); break;
+    case 'bullet':   document.execCommand('insertUnorderedList'); break;
+    case 'numbered': document.execCommand('insertOrderedList'); break;
+    case 'divider':
+      document.execCommand('insertHTML', false, '<hr><p><br></p>');
+      break;
+    case 'datesep':
+      document.execCommand('insertHTML', false,
+        `<div class="nd-date-sep"><div class="nd-date-sep-lbl">📅 ${stamp}</div></div><p><br></p>`);
+      break;
+    case 'hsep1':
+    case 'hsep2':
+    case 'hsep3':{
+      const lvl = id.replace('hsep','');
+      document.execCommand('insertHTML', false,
+        `<div class="nd-heading-sep"><h${lvl} contenteditable="true" data-placeholder="Heading…" style="outline:none">Heading</h${lvl}><div class="nd-heading-sep-date">${stamp}</div></div><p><br></p>`);
+      break;
+    }
+    case 'todo':
+      document.execCommand('insertHTML', false, ndMakeTodo(''));
+      setTimeout(()=>ndBindTodos(), 0);
+      break;
+  }
+  ndAutoSave();
+}
+
+function ndMakeTodo(text){
+  return `<div class="nd-todo" contenteditable="false">
+    <div class="nd-todo-check" onclick="ndToggleTodo(this)"></div>
+    <div class="nd-todo-text" contenteditable="true">${text}</div>
+  </div><p><br></p>`;
+}
+
+function ndToggleTodo(checkEl){
+  checkEl.classList.toggle('done');
+  const textEl = checkEl.nextElementSibling;
+  if(textEl) textEl.classList.toggle('done');
+  ndAutoSave();
+}
+
+function ndBindTodos(){
+  // Make sure newly inserted todo text areas fire autosave
+  document.querySelectorAll('.nd-todo-text').forEach(el => {
+    el.oninput = () => ndAutoSave();
+    el.onkeydown = (ev) => {
+      if(ev.key==='Enter' && !ev.shiftKey){
+        ev.preventDefault();
+        // Insert a new todo after this one
+        const todo = el.closest('.nd-todo');
+        if(todo){
+          const newTodo = document.createElement('div');
+          newTodo.innerHTML = ndMakeTodo('');
+          todo.after(newTodo);
+          newTodo.querySelector('.nd-todo-text').focus();
+          ndBindTodos();
+        }
+      }
+    };
+  });
+}
+
 // ══════════════════════════════════════
 // INIT
 // ══════════════════════════════════════
