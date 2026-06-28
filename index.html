@@ -694,6 +694,11 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     </div>
     <div class="nd-note-title" id="nd-note-title" contenteditable="true" spellcheck="true" data-placeholder="Title…"></div>
     <div class="nd-note-body" id="nd-note-body" contenteditable="true" spellcheck="true" data-placeholder="Write something…"></div>
+    <div id="nd-info-bar" style="padding:18px 20px 8px;border-top:1px solid var(--border);margin-top:16px">
+  <div id="nd-created-lbl" style="font-size:11px;color:var(--text-dim);margin-bottom:4px"></div>
+  <div id="nd-updated-lbl" style="font-size:11px;color:var(--text-dim);margin-bottom:6px"></div>
+  <div id="nd-status-lbl" style="font-size:13px;font-weight:800;color:var(--text-pri)"></div>
+</div> 
   </div>
 
   <div class="nd-fmtbar">
@@ -1203,8 +1208,12 @@ async function saveEvent(){
   const time=document.getElementById('ev-time').value;
   const dur=+document.getElementById('ev-dur').value||60;
   const timeState = calcTimeState(date);
+  const now = new Date().toISOString();
+  const existing = editingEv ? events.find(e=>e.id===editingEv) : null;
   const obj={id:editingEv||uid(),title,body:document.getElementById('ev-body').value.trim(),
-    openState:evState, state:timeState, date,time,dur,tag:document.getElementById('ev-tag').value.trim()};
+    openState:evState, state:timeState, date,time,dur,tag:document.getElementById('ev-tag').value.trim(),
+    createdAt: existing ? (existing.createdAt || now) : now,
+    updatedAt: now};
 
   // conflict check
   const startMin=timeToMin(time);
@@ -1737,6 +1746,17 @@ function openNoteDetail(id){
       if(dataUrl && ndEventId === id) ndShowCover(dataUrl);
     });
   }
+  function fmtDateTime(iso){
+    if(!iso) return 'Unknown';
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
+      + ' at ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  }
+  document.getElementById('nd-created-lbl').textContent = 'Created: ' + fmtDateTime(e.createdAt);
+  document.getElementById('nd-updated-lbl').textContent = 'Last edited: ' + fmtDateTime(e.updatedAt);
+  const os = e.openState || 'open';
+  document.getElementById('nd-status-lbl').textContent = os === 'closed' ? 'CLOSED' : 'OPEN';
+  document.getElementById('nd-status-lbl').style.color = os === 'closed' ? 'var(--red)' : 'var(--green)';
   document.getElementById('note-detail').classList.add('open');
 }
 
@@ -1889,7 +1909,7 @@ async function ndAutoSave(){
   const newTitle = titleEl.textContent.trim();
   const newBody  = bodyEl.innerHTML;
   events = events.map(e => e.id === ndEventId
-    ? Object.assign({}, e, {title: newTitle || e.title, body: newBody || e.body})
+    ? Object.assign({}, e, {title: newTitle || e.title, body: newBody || e.body, updatedAt: new Date().toISOString()})
     : e
   );
   renderEvents();
