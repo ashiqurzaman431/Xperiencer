@@ -1737,6 +1737,37 @@ function openNoteDetail(id){
   const bodyEl  = document.getElementById('nd-note-body');
   titleEl.oninput = () => ndAutoSave();
   bodyEl.oninput  = () => ndAutoSave();
+  bodyEl.onkeydown = (ev) => {
+    // Keyboard shortcuts
+    if(ev.ctrlKey || ev.metaKey){
+      if(ev.key==='b'){ev.preventDefault();document.execCommand('bold');}
+      if(ev.key==='i'){ev.preventDefault();document.execCommand('italic');}
+      if(ev.key==='u'){ev.preventDefault();document.execCommand('underline');}
+    }
+    // Tab key
+    if(ev.key==='Tab'){
+      ev.preventDefault();
+      const sel = window.getSelection();
+      if(!sel.rangeCount) return;
+      // Check if inside a list item
+      const node = sel.anchorNode;
+      const li = node && node.parentElement && node.parentElement.closest('li');
+      if(li){
+        document.execCommand(ev.shiftKey ? 'outdent' : 'indent');
+      } else {
+        document.execCommand('insertHTML', false, '&emsp;');
+      }
+    }
+    // Slash menu trigger
+    if(ev.key==='/'){
+      setTimeout(()=>showSlashMenu(bodyEl), 0);
+    }
+    // Enter key handling for lists and todos
+    if(ev.key==='Enter' && ev.shiftKey){
+      ev.preventDefault();
+      document.execCommand('insertHTML', false, '<br>');
+    }
+  };
   const tags = (e.tag||'').split(' ').filter(Boolean);
   document.getElementById('nd-tags').innerHTML = tags.length
     ? tags.map(t=>`<span class="nd-tag">#${esc(t.replace(/^#/,''))}</span>`).join('')
