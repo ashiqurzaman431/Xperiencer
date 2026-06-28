@@ -560,8 +560,8 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <input class="inp" id="ev-tag" placeholder="#life #work #health…">
     <div class="field-label">Status</div>
     <div class="state-row">
-      <button id="st-open" class="state-btn" onclick="'open')">Open</button>
-      <button id="st-closed" class="state-btn" onclick="'closed')">Closed</button>
+      <button id="st-open" class="state-btn" onclick="selectState('open')">Open</button>
+      <button id="st-closed" class="state-btn" onclick="selectState('closed')">Closed</button>
     </div>
     <div id="ev-conflict-box"></div>
     <button class="sheet-btn" onclick="saveEvent()">Save Event</button>
