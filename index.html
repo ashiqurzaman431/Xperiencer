@@ -172,7 +172,10 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .nd-todo-check.done::after{content:'✓';font-size:11px;font-weight:800;color:#1a1410}
 .nd-todo-text{flex:1;outline:none;font-size:16px;color:var(--text-sec);line-height:1.6;min-width:0;background:none;border:none;font-family:inherit}
 .nd-todo-text.done{text-decoration:line-through;color:var(--text-dim)}
-
+.list-type-menu{position:fixed;z-index:500;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.6);min-width:160px}
+.list-type-item{padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text-pri);cursor:pointer}
+.list-type-item:hover{background:var(--bg-card2)}
+  
 /* ── Date separator ── */
 .nd-date-sep{border-top:1px solid var(--border);margin:16px 0 8px;padding-top:8px}
 .nd-date-sep-lbl{font-size:10px;font-weight:700;color:var(--text-dim);letter-spacing:.06em}
@@ -2203,6 +2206,59 @@ function ndBindTodos(){
   });
 }
 
+// List type context menu
+let listLongPressTimer = null;
+let listTypeMenuTarget = null;
+
+document.getElementById('nd-note-body').addEventListener('touchstart', function(e){
+  const li = e.target.closest('li');
+  if(!li) return;
+  listLongPressTimer = setTimeout(()=>showListTypeMenu(li, e.touches[0].clientX, e.touches[0].clientY), 600);
+}, {passive:true});
+
+document.getElementById('nd-note-body').addEventListener('touchend', function(){
+  clearTimeout(listLongPressTimer);
+}, {passive:true});
+
+document.getElementById('nd-note-body').addEventListener('contextmenu', function(e){
+  const li = e.target.closest('li');
+  if(!li) return;
+  e.preventDefault();
+  showListTypeMenu(li, e.clientX, e.clientY);
+});
+
+function showListTypeMenu(li, x, y){
+  listTypeMenuTarget = li.closest('ul,ol');
+  if(!listTypeMenuTarget) return;
+  let existing = document.getElementById('list-type-menu');
+  if(existing) existing.remove();
+  const menu = document.createElement('div');
+  menu.id = 'list-type-menu';
+  menu.className = 'list-type-menu';
+  menu.innerHTML = `
+    <div class="list-type-item" onclick="applyListType('decimal')">1. 2. 3.  Numeric</div>
+    <div class="list-type-item" onclick="applyListType('lower-alpha')">a. b. c.  Alphabetic</div>
+    <div class="list-type-item" onclick="applyListType('disc')">•  Bullet</div>
+    <div class="list-type-item" onclick="applyListType('none')">—  No marker</div>
+  `;
+  menu.style.left = Math.min(x, window.innerWidth-170) + 'px';
+  menu.style.top = Math.min(y+8, window.innerHeight-180) + 'px';
+  document.body.appendChild(menu);
+  setTimeout(()=>document.addEventListener('click', ()=>menu.remove(), {once:true}), 0);
+}
+
+function applyListType(type){
+  const menu = document.getElementById('list-type-menu');
+  if(menu) menu.remove();
+  if(!listTypeMenuTarget) return;
+  if(type==='disc'){
+    listTypeMenuTarget.style.listStyleType = 'disc';
+  } else {
+    listTypeMenuTarget.style.listStyleType = type;
+  }
+  ndAutoSave();
+}
+  
 // ══════════════════════════════════════
 // INIT
 // ══════════════════════════════════════
