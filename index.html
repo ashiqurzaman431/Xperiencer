@@ -1673,7 +1673,7 @@ function openNoteDetail(id){
   document.getElementById('nd-icon').innerHTML = ndIcons[e.state] || ndIcons.future;
   document.getElementById('nd-title-lbl').textContent = e.title || 'Add Note';
   document.getElementById('nd-note-title').textContent = e.title || '';
-  document.getElementById('nd-note-body').textContent = e.body || '';
+  document.getElementById('nd-note-body').innerHTML = e.body || '';
   // attach auto-save listeners (remove old ones first)
   const titleEl = document.getElementById('nd-note-title');
   const bodyEl  = document.getElementById('nd-note-body');
@@ -1853,9 +1853,9 @@ async function ndAutoSave(){
   const titleEl = document.getElementById('nd-note-title');
   const bodyEl  = document.getElementById('nd-note-body');
   const newTitle = titleEl.textContent.trim();
-  const newBody  = bodyEl.textContent.trim();
+  const newBody  = bodyEl.innerHTML;
   events = events.map(e => e.id === ndEventId
-    ? Object.assign({}, e, {title: newTitle || e.title, body: newBody})
+    ? Object.assign({}, e, {title: newTitle || e.title, body: newBody || e.body})
     : e
   );
   renderEvents();
