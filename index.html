@@ -459,8 +459,8 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     </div>
     <div class="tab-row">
       <div id="etab-all" class="vtab on" onclick="switchETab('all')">All</div>
-            <div id="etab-open" class="vtab off" onclick="switchETab('open')">Open</div>
-            <div id="etab-closed" class="vtab off" onclick="switchETab('closed')">Closed</div>
+      <div id="etab-open" class="vtab off" onclick="switchETab('open')">Open</div>
+      <div id="etab-closed" class="vtab off" onclick="switchETab('closed')">Closed</div>
     </div>
   </div>
   <div style="flex:1;overflow:hidden;display:flex;flex-direction:column" id="events-scroll">
@@ -731,6 +731,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     </div>
     <div class="nd-note-title" id="nd-note-title" contenteditable="true" spellcheck="true" data-placeholder="Title…"></div>
     <div class="nd-note-body" id="nd-note-body" contenteditable="true" spellcheck="true" data-placeholder="Write something…"></div>
+    <div id="nd-history" style="margin-top:32px;padding-top:16px;border-top:1px solid var(--border)"></div>
     <div id="nd-info-bar" style="padding:18px 20px 8px;border-top:1px solid var(--border);margin-top:16px">
   <div id="nd-created-lbl" style="font-size:11px;color:var(--text-dim);margin-bottom:4px"></div>
   <div id="nd-updated-lbl" style="font-size:11px;color:var(--text-dim);margin-bottom:6px"></div>
@@ -746,6 +747,23 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
   </div>
 </div>
 
+
+<!-- ══ VERSION VIEWER ══ -->
+<div id="version-viewer" style="display:none;position:fixed;inset:0;z-index:300;background:#1e1a14;flex-direction:column">
+  <div style="padding:max(env(safe-area-inset-top),14px) 20px 12px;display:flex;align-items:center;gap:12px;flex-shrink:0;border-bottom:1px solid var(--border)">
+    <button onclick="closeVersionViewer()" style="width:36px;height:36px;border-radius:50%;background:var(--bg-card2);border:none;color:var(--text-pri);cursor:pointer;display:flex;align-items:center;justify-content:center">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    </button>
+    <div>
+      <div id="vv-label" style="font-size:13px;font-weight:800;color:var(--lime)"></div>
+      <div id="vv-ts" style="font-size:11px;color:var(--text-dim)"></div>
+    </div>
+  </div>
+  <div style="flex:1;overflow-y:auto;padding:24px;scrollbar-width:none">
+    <div id="vv-title" style="font-size:26px;font-weight:800;color:var(--text-pri);margin-bottom:16px"></div>
+    <div id="vv-body" style="font-size:16px;color:var(--text-sec);line-height:1.8"></div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 </div>
@@ -780,6 +798,7 @@ async function enterApp(){
       schedules   = data.schedules   || [];
       routines    = data.routines    || [];
       completions = data.completions || {};
+      deletionLog = data.deletionLog || [];
     }
   }
   schSelDate = todayStr();
@@ -845,7 +864,7 @@ function driveFileName(){
 
 async function driveSaveData(){
   if(!driveAccessToken || !driveFolderId) return;
-  const payload = JSON.stringify({ events, schedules, routines, completions });
+  const payload = JSON.stringify({ events, schedules, routines, completions, deletionLog });
   const fileName = driveFileName();
   // Upload new data file
   const meta = { name: fileName, parents: [driveFolderId] };
@@ -961,6 +980,7 @@ let events      = [];
 let schedules   = [];
 let routines    = [];
 let completions = {};
+let deletionLog = [];
 let curView   = 'events';
 let eTab      = 'all';
 let editingEv = null;
@@ -988,6 +1008,25 @@ function toDS(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate(
 function p2(n){return String(n).padStart(2,'0')}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function uid(){return Date.now()+''+Math.floor(Math.random()*9999)}
+
+function makeVersion(ev, label){
+  return {
+    ts: new Date().toISOString(),
+    label: label || 'Edited',
+    title: ev.title || '',
+    body: ev.body || '',
+    openState: ev.openState || 'open',
+    date: ev.date || '',
+    time: ev.time || '',
+    tag: ev.tag || ''
+  };
+}
+function pushVersion(ev, label){
+  const versions = ev.versions ? [...ev.versions] : [];
+  versions.push(makeVersion(ev, label));
+  if(versions.length > 20) versions.splice(0, versions.length - 20);
+  return versions;
+}
 function calcTimeState(dateStr){
   if(!dateStr) return null;
   const today = todayStr();
@@ -1106,14 +1145,29 @@ function switchETab(t){
 }
 
 function renderEvents(){
-  let list=[...events].map(e=>Object.assign({},e,{_timeState:calcTimeState(e.date)}));
-  if(eTab==='open') list=list.filter(e=>(e.openState||'open')==='open');
-  else if(eTab==='closed') list=list.filter(e=>(e.openState||'open')==='closed');
+  const today = todayStr();
+  const schItems = schedules.map(s=>({
+    ...s, _source:'schedule',
+    _timeState: calcTimeState(s.date),
+    openState:'open', body: s.notes||'', tag:''
+  }));
+  const rtItems = routines
+    .filter(r=>routineAppliesOn(r,today))
+    .map(r=>({
+      ...r, _source:'routine',
+      date: today,
+      _timeState: getEventState(today,r.time,r.dur),
+      openState:'open', body: r.description||'', tag:''
+    }));
+  const allItems = [...events.map(e=>({...e,_source:'event',_timeState:calcTimeState(e.date)})), ...schItems, ...rtItems];
+  let list = eTab==='all' ? allItems
+    : eTab==='open' ? allItems.filter(e=>(e.openState||'open')==='open')
+    : allItems.filter(e=>(e.openState||'open')==='closed');
   list.sort((a,b)=>{
     const ord={present:0,future:1,past:2};
     const ta=ord[a._timeState]??3, tb=ord[b._timeState]??3;
     if(ta!==tb) return ta-tb;
-    if(!a.date && !b.date) return 0;
+    if(!a.date&&!b.date) return 0;
     if(!a.date) return 1;
     if(!b.date) return -1;
     return a.date>b.date?1:-1;
@@ -1146,22 +1200,34 @@ function renderEvents(){
       if(diff===-1) return 'Yesterday';
       return e.date+(e.time?' · '+fmtTime(e.time):'');
     })():'';
-    const coverHtml = e.hasCover
+    const clickFn = e._source==='schedule'
+      ? `openScheduleSheet('${e.id}')`
+      : e._source==='routine'
+        ? `openRoutineSheet('${e.id}')`
+        : `openNoteDetail('${e.id}')`;
+    const typeBadge = e._source==='schedule'
+      ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:var(--bg-input);color:var(--text-sec);letter-spacing:.05em">SCHEDULE</span>`
+      : e._source==='routine'
+        ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:var(--green-dim,rgba(100,200,100,.12));color:var(--lime);letter-spacing:.05em">ROUTINE</span>`
+        : '';
+    const coverHtml = (e._source==='event' && e.hasCover)
       ? `<div class="ev-card-cover" id="cover-strip-${e.id}">
           <img src="${coverCache[e.id]||''}" style="object-position:center ${(e.coverPosition||50)}%">
          </div>`
       : `<div style="height:134px;margin:-20px -20px 14px -20px;border-radius:18px 18px 0 0;background:var(--bg-card2);flex-shrink:0"></div>`;
-    return `<div class="ev-hcard ${skin}" onclick="openNoteDetail('${e.id}')">
+    const bodyText = e.body ? e.body.replace(/<[^>]*>/g,'').trim() : '';
+    return `<div class="ev-hcard ${skin}" onclick="${clickFn}">
       ${coverHtml}
-      <button class="ev-action" onclick="event.stopPropagation();openNoteDetail('${e.id}')">${actionIcons[e._timeState]||actionIcons.future}</button>
+      <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[e._timeState]||actionIcons.future}</button>
       <div class="ev-icon">${cardIcons[e._timeState]||cardIcons.future}</div>
+      ${typeBadge}
       <div class="ev-title">${esc(e.title)}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px">
         ${e._timeState?`<span class="state-badge ${e._timeState}">${{past:'Past',present:'Present',future:'Future'}[e._timeState]}</span>`:''}
-        <span class="state-badge" style="background:${(e.openState||'open')==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${(e.openState||'open')==='closed'?'var(--red)':'var(--green)'};font-weight:800">${(e.openState||'open')==='closed'?'Closed':'Open'}</span>
+        ${e._source==='event'?`<span class="state-badge" style="background:${(e.openState||'open')==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${(e.openState||'open')==='closed'?'var(--red)':'var(--lime)'};font-weight:800">${(e.openState||'open')==='closed'?'Closed':'Open'}</span>`:''}
       </div>
       ${tags.length?`<div class="ev-tags">${tags.map(t=>`<span class="ev-tag">${esc(t)}</span>`).join('')}</div>`:''}
-      ${e.body?`<div class="ev-body">${esc(e.body)}</div>`:'<div class="ev-body" style="flex:1"></div>'}
+      ${bodyText?`<div class="ev-body">${esc(bodyText)}</div>`:'<div class="ev-body" style="flex:1"></div>'}
       <div class="ev-footer">
         <span class="ev-time-lbl">${timeLbl}</span>
         <div class="ev-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
@@ -1169,9 +1235,9 @@ function renderEvents(){
     </div>`;
   }).join('');
 
-  // Load covers gradually after cards render
+  // Load covers gradually after cards render — events only
   list.forEach(e => {
-    if(e.hasCover && !coverCache[e.id]){
+    if(e._source==='event' && e.hasCover && !coverCache[e.id]){
       driveLoadCover(e.id).then(dataUrl => {
         if(!dataUrl) return;
         coverCache[e.id] = dataUrl;
@@ -1234,10 +1300,12 @@ async function saveEvent(){
   const timeState = calcTimeState(date);
   const now = new Date().toISOString();
   const existing = editingEv ? events.find(e=>e.id===editingEv) : null;
+  const vLabel = editingEv ? 'Edited' : 'Created';
   const obj={id:editingEv||uid(),title,body:document.getElementById('ev-body').value.trim(),
     openState:evState, state:timeState, date,time,dur,tag:document.getElementById('ev-tag').value.trim(),
     createdAt: existing ? (existing.createdAt || now) : now,
     updatedAt: now};
+  obj.versions = pushVersion({...obj, versions: existing?.versions||[]}, vLabel);
 
   // conflict check
   const startMin=timeToMin(time);
@@ -1409,6 +1477,7 @@ async function saveSchedule(){
   document.getElementById('sch-overlay').classList.remove('open');
   renderSchStrip();renderSchedule();renderCalView();
   showToast(editingSc?'Schedule updated':'Schedule added');
+  renderEvents();
   driveSaveData();
 }
 
@@ -1419,6 +1488,7 @@ async function deleteSchedule(){
   document.getElementById('sch-overlay').classList.remove('open');
   renderSchStrip();renderSchedule();renderCalView();
   showToast('Schedule deleted');
+  renderEvents();
 }
 
 // ══════════════════════════════════════
@@ -1493,6 +1563,7 @@ async function toggleRoutine(id,ds){
   completions[key]=!completions[key];
   await driveSaveData();
   renderRoutine();
+  renderEvents();
 }
 
 function openRoutineDetail(id){
@@ -1543,6 +1614,7 @@ async function saveRoutine(){
   document.getElementById('routine-overlay').classList.remove('open');
   renderRoutine();renderSchStrip();renderCalView();
   showToast('Routine saved');
+  renderEvents();
   driveSaveData();
 }
 
@@ -1704,6 +1776,7 @@ function reconnectGoogle(){
         schedules   = data.schedules   || [];
         routines    = data.routines    || [];
         completions = data.completions || {};
+        deletionLog = data.deletionLog || [];
       }
       renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView();
     }
@@ -1844,7 +1917,14 @@ async function ndDuplicate(){
   document.getElementById('nd-dropdown').classList.remove('open');
   const src = events.find(x => x.id === ndEventId);
   if(!src) return;
-  const copy = Object.assign({}, src, {id: uid(), title: src.title + ' (copy)'});
+  const copy = Object.assign({}, src, {
+    id: uid(),
+    title: src.title + ' (copy)',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    versions: []
+  });
+  copy.versions = pushVersion(copy, 'Created');
   events.unshift(copy);
   await driveSaveData();
   closeNoteDetail();
@@ -1854,9 +1934,18 @@ async function ndDuplicate(){
 
 async function ndDelete(){
   if(!ndEventId) return;
+  const ev = events.find(e=>e.id===ndEventId);
+  if(ev){
+    deletionLog.unshift({
+      id: ev.id,
+      title: ev.title || '(untitled)',
+      deletedAt: new Date().toISOString(),
+      lastVersion: ev.versions ? ev.versions[ev.versions.length-1] : null
+    });
+    if(deletionLog.length > 50) deletionLog.splice(50);
+  }
   driveDeleteCover(ndEventId);
   events = events.filter(e => e.id !== ndEventId);
-  driveDeleteCover(ndEventId); // fire and forget, no await needed
   driveSaveData();
   closeNoteDetail();
   renderEvents(); renderCalView();
@@ -1964,10 +2053,19 @@ async function ndAutoSave(){
   const bodyEl  = document.getElementById('nd-note-body');
   const newTitle = titleEl.textContent.trim();
   const newBody  = bodyEl.innerHTML;
-  events = events.map(e => e.id === ndEventId
-    ? Object.assign({}, e, {title: newTitle || e.title, body: newBody || e.body})
-    : e
-  );
+  events = events.map(e => {
+    if(e.id !== ndEventId) return e;
+    const oldLen = (e.body||'').replace(/<[^>]*>/g,'').length;
+    const newLen = newBody.replace(/<[^>]*>/g,'').length;
+    const vLabel = newLen > oldLen ? 'Extended' : newLen < oldLen ? 'Shortened' : 'Edited';
+    const updated = Object.assign({}, e, {
+      title: newTitle || e.title,
+      body: newBody || e.body,
+      updatedAt: new Date().toISOString()
+    });
+    updated.versions = pushVersion(updated, vLabel);
+    return updated;
+  });
   renderEvents();
   clearTimeout(ndAutoSaveTimer);
   ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
