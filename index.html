@@ -327,10 +327,10 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 
 
 /* ── Note Cover ── */
-.nd-cover{width:100%;height:180px;flex-shrink:0;position:relative;background:var(--bg-card2);display:none;overflow:hidden}
+.nd-cover{width:100%;height:100px;flex-shrink:0;position:relative;background:var(--bg-card2);display:none;overflow:hidden}
 .nd-cover.has-cover{display:block}
 .nd-cover img{width:100%;height:100%;object-fit:cover;display:block}
-.nd-cover-gradient{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 40%,#1e1a14 100%)}
+.nd-cover-gradient{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 20%,rgba(0,0,0,.7) 100%)}
 .nd-cover-btn{position:absolute;bottom:10px;right:12px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:700;color:#fff;cursor:pointer;display:flex;align-items:center;gap:5px;backdrop-filter:blur(4px)}
 .nd-cover-btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2}
 .nd-add-cover{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text-sec);cursor:pointer;margin-bottom:16px;width:fit-content;background:var(--bg-card2);border:1px solid var(--border);border-radius:20px;padding:6px 14px}
@@ -1759,15 +1759,68 @@ async function ndSetCover(input){
   reader.readAsDataURL(input.files[0]);
   input.value='';
 }
+let coverDragStartY = null;
+let coverDragStartPos = 50;
+let coverDragTimer = null;
+
 function ndShowCover(dataUrl){
   const coverEl = document.getElementById('nd-cover');
   const imgEl   = document.getElementById('nd-cover-img');
   if(dataUrl){
     imgEl.src = dataUrl;
     coverEl.classList.add('has-cover');
+    // Apply saved position
+    const ev = events.find(x => x.id === ndEventId);
+    const pos = (ev && ev.coverPosition != null) ? ev.coverPosition : 50;
+    imgEl.style.objectPosition = `center ${pos}%`;
+    // Attach drag listeners (remove old ones first)
+    imgEl.onmousedown = null;
+    imgEl.ontouchstart = null;
+    imgEl.onmousedown = coverDragStart;
+    imgEl.ontouchstart = coverDragStart;
   } else {
+    imgEl.src = '';
     coverEl.classList.remove('has-cover');
   }
+}
+
+function coverDragStart(e){
+  e.preventDefault();
+  const ev = events.find(x => x.id === ndEventId);
+  coverDragStartPos = (ev && ev.coverPosition != null) ? ev.coverPosition : 50;
+  coverDragStartY = e.touches ? e.touches[0].clientY : e.clientY;
+  document.onmousemove = coverDragMove;
+  document.ontouchmove = coverDragMove;
+  document.onmouseup = coverDragEnd;
+  document.ontouchend = coverDragEnd;
+}
+
+function coverDragMove(e){
+  if(coverDragStartY === null) return;
+  const imgEl = document.getElementById('nd-cover-img');
+  const coverEl = document.getElementById('nd-cover');
+  const currentY = e.touches ? e.touches[0].clientY : e.clientY;
+  const deltaY = currentY - coverDragStartY;
+  const coverH = coverEl.offsetHeight;
+  const deltaPct = (deltaY / coverH) * 100;
+  let newPos = Math.max(0, Math.min(100, coverDragStartPos - deltaPct));
+  imgEl.style.objectPosition = `center ${newPos}%`;
+  // Save position to event object immediately (no Drive yet)
+  events = events.map(ev => ev.id === ndEventId
+    ? Object.assign({}, ev, {coverPosition: newPos})
+    : ev
+  );
+}
+
+function coverDragEnd(){
+  coverDragStartY = null;
+  document.onmousemove = null;
+  document.ontouchmove = null;
+  document.onmouseup = null;
+  document.ontouchend = null;
+  // Debounced Drive save
+  clearTimeout(coverDragTimer);
+  coverDragTimer = setTimeout(() => { driveSaveData(); }, 1000);
 }
 
 let ndAutoSaveTimer = null;
