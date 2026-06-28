@@ -937,7 +937,7 @@ let curView   = 'events';
 let eTab      = 'all';
 let editingEv = null;
 let editingSc = null;
-let evState   = 'future';
+let evState   = 'open';
 let rtType    = 'day';
 let schWeekOff = 0;   // weeks from today
 let calOff    = 0;    // weeks or months
@@ -1182,7 +1182,7 @@ async function saveEvent(){
   const timeState = calcTimeState(date);
   const obj={id:editingEv||uid(),title,body:document.getElementById('ev-body').value.trim(),
     openState:evState, state:timeState, date,time,dur,tag:document.getElementById('ev-tag').value.trim()};
-  
+
   // conflict check
   const startMin=timeToMin(time);
   if(date && hasConflict(date,startMin,dur,editingEv)){
@@ -1196,8 +1196,6 @@ async function saveEvent(){
     return;
   }
 
-  const obj={id:editingEv||),title,body:document.getElementById('ev-body').value.trim(),
-    state:evState,date,time,dur,tag:document.getElementById('ev-tag').value.trim()};
   if(editingEv){events=events.map(e=>e.id===editingEv?obj:e);}
   else events.unshift(obj);
   document.getElementById('event-overlay').classList.remove('open');
