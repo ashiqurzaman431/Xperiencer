@@ -960,6 +960,12 @@ function toDS(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate(
 function p2(n){return String(n).padStart(2,'0')}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function uid(){return Date.now()+''+Math.floor(Math.random()*9999)}
+function calcTimeState(dateStr){
+  if(!dateStr) return null;
+  const today = todayStr();
+  if(dateStr === today) return 'present';
+  return dateStr < today ? 'past' : 'future';
+}
 function fmtTime(t){if(!t)return'';const[h,m]=t.split(':').map(Number);return(h%12||12)+':'+p2(m)+(h<12?'am':'pm')}
 function fmtTimeEnd(t,dur){if(!t)return'';const[h,m]=t.split(':').map(Number);const tot=h*60+m+(+dur||60);return fmtTime(p2(Math.floor(tot/60)%24)+':'+p2(tot%60))}
 function addMinutes(t,min){const[h,m]=t.split(':').map(Number);const tot=h*60+m+min;return p2(Math.floor(tot/60)%24)+':'+p2(tot%60)}
@@ -1173,7 +1179,10 @@ async function saveEvent(){
   const date=document.getElementById('ev-date').value;
   const time=document.getElementById('ev-time').value;
   const dur=+document.getElementById('ev-dur').value||60;
-
+  const timeState = calcTimeState(date);
+  const obj={id:editingEv||uid(),title,body:document.getElementById('ev-body').value.trim(),
+    openState:evState, state:timeState, date,time,dur,tag:document.getElementById('ev-tag').value.trim()};
+  
   // conflict check
   const startMin=timeToMin(time);
   if(date && hasConflict(date,startMin,dur,editingEv)){
@@ -1187,7 +1196,7 @@ async function saveEvent(){
     return;
   }
 
-  const obj={id:editingEv||uid(),title,body:document.getElementById('ev-body').value.trim(),
+  const obj={id:editingEv||),title,body:document.getElementById('ev-body').value.trim(),
     state:evState,date,time,dur,tag:document.getElementById('ev-tag').value.trim()};
   if(editingEv){events=events.map(e=>e.id===editingEv?obj:e);}
   else events.unshift(obj);
