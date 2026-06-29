@@ -1,61 +1,45 @@
 // Xperiencer Service Worker
-// Bump CACHE_NAME version on every deploy to force-refresh cached assets.
-const CACHE_NAME = 'xperiencer-cache-v2';
-
-const ASSETS = [
-  './',
+const CACHE_NAME = 'xperiencer-v1';
+const PRECACHE = [
   './index.html',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];
 
-// Install: pre-cache the app shell
-self.addEventListener('install', (event) => {
+self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE))
   );
+  self.skipWaiting();
 });
 
-// Activate: clean up old caches
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((key) => key !== CACHE_NAME)
-            .map((key) => caches.delete(key))
-      )
-    ).then(() => self.clients.claim())
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    )
   );
+  self.clients.claim();
 });
 
-// Fetch: cache-first for app shell assets, fall back to network,
-// and fall back to cached index.html for navigation requests when offline.
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-
-  if (request.method !== 'GET') return;
-
+self.addEventListener('fetch', event => {
+  // Network-first for API calls (Google Drive, etc.)
+  if (event.request.url.includes('googleapis.com') ||
+      event.request.url.includes('accounts.google.com')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  // Cache-first for app shell
   event.respondWith(
-    caches.match(request).then((cached) => {
+    caches.match(event.request).then(cached => {
       if (cached) return cached;
-
-      return fetch(request)
-        .then((response) => {
-          // Only cache successful, same-origin responses
-          if (response && response.status === 200 && response.type === 'basic') {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-          }
-          return response;
-        })
-        .catch(() => {
-          if (request.mode === 'navigate') {
-            return caches.match('./index.html');
-          }
-        });
+      return fetch(event.request).then(response => {
+        if (!response || response.status !== 200 || response.type !== 'basic') return response;
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        return response;
+      }).catch(() => caches.match('./index.html'));
     })
   );
 });
