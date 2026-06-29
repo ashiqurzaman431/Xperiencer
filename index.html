@@ -362,6 +362,27 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 .sheet-btn:active{opacity:.88}
 .sheet-btn.danger{background:var(--red-dim);color:var(--red);margin-top:10px}
 .divider{height:1px;background:var(--border);margin:16px 0}
+/* ══ Timeline Layout ══ */
+.tl-container{display:flex;flex-direction:column;gap:0;padding:0 16px 100px;overflow-y:auto;flex:1}
+.tl-row{display:flex;flex-direction:row;align-items:stretch;gap:0;margin-bottom:0}
+.tl-left{width:56px;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;padding-right:8px;position:relative}
+.tl-time-start{font-size:10px;font-weight:700;color:var(--text-dim);line-height:1;padding-top:2px;text-align:right}
+.tl-time-end{font-size:10px;font-weight:700;color:var(--text-dim);line-height:1;padding-bottom:2px;text-align:right;margin-top:auto}
+.tl-dur-label{font-size:9px;color:var(--text-dim);writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);flex:1;display:flex;align-items:center;justify-content:center;letter-spacing:.04em;opacity:.6}
+.tl-line{width:1px;background:var(--border);flex-shrink:0;margin:0 0 0 0;opacity:.4;align-self:stretch}
+.tl-card-wrap{flex:1;padding:6px 0 6px 10px}
+
+/* ══ Spare Card ══ */
+.tl-spare{display:flex;flex-direction:row;align-items:center;justify-content:space-between;border:1.5px dashed var(--border);border-radius:14px;padding:8px 14px;opacity:.5;min-height:44px}
+.tl-spare-time{font-size:10px;font-weight:700;color:var(--text-dim)}
+.tl-spare-dur{font-size:11px;font-weight:700;color:var(--text-dim);text-align:center}
+
+/* ══ Done schedule card ══ */
+.sch-card-done{opacity:.5}
+.sch-card-done .sch-card-title{text-decoration:line-through}
+.sch-done-check{position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;background:var(--lime);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sch-done-check svg{width:11px;height:11px;stroke:#1a1410;stroke-width:3;fill:none}
+  
 /* Conflict alert */
 .conflict-box{background:var(--red-dim);border:1px solid rgba(232,76,61,.3);border-radius:12px;padding:14px;margin-top:12px}
 .conflict-title{font-size:12px;font-weight:800;color:var(--red);margin-bottom:10px}
@@ -1458,6 +1479,67 @@ function renderSchedule(){
   }).join('');
 }
 
+ // ══ Timeline Helpers ══
+function tlTimeToMin(timeStr){
+  if(!timeStr) return 0;
+  const [h,m] = timeStr.split(':').map(Number);
+  return h*60 + (m||0);
+}
+
+function tlFmtDur(totalMin){
+  if(totalMin <= 0) return '0m';
+  const h = Math.floor(totalMin/60);
+  const m = totalMin % 60;
+  if(h && m) return h+'h '+m+'m';
+  if(h) return h+'h';
+  return m+'m';
+}
+
+function tlFmtTime(timeStr){
+  if(!timeStr) return '';
+  const [h,m] = timeStr.split(':').map(Number);
+  const ampm = h >= 12 ? 'pm' : 'am';
+  const hh = h % 12 || 12;
+  return hh+':'+(String(m||0).padStart(2,'0'))+' '+ampm;
+}
+
+function tlEndTime(startTime, durMin){
+  const start = tlTimeToMin(startTime);
+  const end = start + (durMin||0);
+  const h = Math.floor(end/60) % 24;
+  const m = end % 60;
+  return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+function tlBuildRows(items){
+  // items: [{id, title, time, dur, ...extra}]
+  // sort by time
+  const sorted = [...items].sort((a,b)=>tlTimeToMin(a.time)-tlTimeToMin(b.time));
+  const DAY_START = 5*60; // 5:00am in minutes
+  const rows = [];
+  let cursor = DAY_START;
+
+  sorted.forEach(item => {
+    const startMin = tlTimeToMin(item.time);
+    const endMin = startMin + (item.dur||0);
+    // spare before this item
+    if(startMin > cursor){
+      const spareStart = cursor;
+      const spareEnd = startMin;
+      rows.push({
+        type:'spare',
+        startTime: String(Math.floor(spareStart/60)).padStart(2,'0')+':'+String(spareStart%60).padStart(2,'0'),
+        endTime:   String(Math.floor(spareEnd/60)).padStart(2,'0')+':'+String(spareEnd%60).padStart(2,'0'),
+        dur: spareEnd - spareStart
+      });
+    }
+    rows.push({type:'item', ...item});
+    cursor = Math.max(cursor, endMin);
+  });
+
+  return rows;
+} 
+  
 function getEventState(date,time,dur){
   if(!date||!time) return 'future';
   const now=new Date();
