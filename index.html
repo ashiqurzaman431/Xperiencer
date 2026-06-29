@@ -199,9 +199,12 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 /* ── Event Horizontal Cards ── */
 .ev-scroll{overflow-x:auto;overflow-y:hidden;display:flex;gap:14px;padding:4px 20px 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .ev-scroll::-webkit-scrollbar{display:none}
+@media(min-width:600px){.ev-scroll{overflow-x:visible;overflow-y:visible;flex-wrap:wrap;gap:16px}.ev-hcard{min-width:0;max-width:none;flex:1 1 calc(50% - 8px)}}
+@media(min-width:900px){.ev-hcard{flex:1 1 calc(33% - 11px)}}
 /* ══ Events Tab Two-List Layout ══ */
 .ev-section-title{font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;padding:20px 20px 10px}
 .ev-all-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 100px}
+@media(min-width:900px){.ev-all-grid{grid-template-columns:1fr 1fr 1fr}}
 .ev-all-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:6px;min-height:120px;position:relative;overflow:hidden}
 .ev-all-card:active{transform:scale(.97)}
 .ev-all-card-title{font-size:13px;font-weight:700;color:var(--text-pri);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -1396,8 +1399,10 @@ function renderEvents(){
     const db=b.updatedAt||b.createdAt||'';
     return db>da?1:-1;
   });
-  const allSch = schItems.filter(s=>(s.notes||'').trim().length>0);
-  const allRt  = rtItems.filter(r=>(r.body||'').trim().length>0);
+  const allSch = schItems.filter(s=>(s.body||'').trim().length>0);
+  const allRt  = routines
+    .filter(r=>(r.body||'').trim().length>0)
+    .map(r=>({...r, _source:'routine', _timeState:'future', openState:'open'}));
   const allItems = [...allEvs, ...allSch, ...allRt];
 
   const gridEl = document.getElementById('ev-all-grid');
