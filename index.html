@@ -454,7 +454,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 
 
 /* ── Note Cover ── */
-.nd-cover{width:100%;height:100px;flex-shrink:0;position:relative;background:var(--bg-card2);display:none;overflow:hidden}
+.nd-cover{width:100%;height:240px;flex-shrink:0;position:relative;background:var(--bg-card2);display:none;overflow:hidden}
 .nd-cover.has-cover{display:block}
 .nd-cover img{width:100%;height:100%;object-fit:cover;display:block}
 .nd-cover-gradient{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 20%,rgba(0,0,0,.7) 100%)}
@@ -809,6 +809,12 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2v14a2 2 0 002 2h14"/><path d="M18 22V8a2 2 0 00-2-2H2"/></svg>
           Crop cover
         </button>
+        <div id="nd-card-pos-row" style="display:none;padding:10px 16px;flex-direction:column;gap:6px">
+          <div style="font-size:11px;font-weight:700;color:var(--text-dim)">Card background position</div>
+          <input type="range" id="nd-card-pos-slider" min="0" max="100" value="50" step="1"
+            style="width:100%;accent-color:var(--lime);height:4px;cursor:pointer"
+            oninput="onCardPosSlider(this.value)">
+        </div>
         <div class="nd-drop-divider"></div>
         <button class="nd-drop-item" onclick="ndEdit()">
           <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -942,7 +948,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
   <div style="flex-shrink:0;padding:14px 20px calc(env(safe-area-inset-bottom)+14px);background:var(--bg-card);border-top:1px solid var(--border)">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
-      <input type="range" id="crop-zoom" min="100" max="400" value="100" step="1"
+      <input type="range" id="crop-zoom" min="0" max="100" value="0" step="1"
         style="flex:1;accent-color:var(--lime);height:4px;cursor:pointer"
         oninput="onCropZoom(this.value)">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-dim)" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6"/></svg>
@@ -1437,10 +1443,10 @@ function renderEvents(){
         : e._source==='routine'
           ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(200,232,50,.14);color:var(--lime);letter-spacing:.05em">ROUTINE</span>`
           : '';
-      const hasCover = e._source==='event' && e.hasCover;
+      const hasCover = !!e.hasCover;
       const coverSizeClass = hasCover ? ` cover-${e.coverSize||'md'}` : '';
       const coverInlineStyle = (hasCover && coverCache[e.id])
-        ? ` style="background-image:url('${coverCache[e.id]}');background-position:center ${e.coverPosition||50}%"`
+        ? ` style="background-image:url('${coverCache[e.id]}');background-position:center ${e.coverCardPosition != null ? e.coverCardPosition : 50}%"`
         : '';
       const bodyText = e.body ? e.body.replace(/<[^>]*>/g,'').trim() : '';
       return `<div class="ev-hcard ${skin}${hasCover?' has-cover':''}${coverSizeClass}" id="ev-hcard-${e.id}"${coverInlineStyle} onclick="${clickFn}">
@@ -1462,7 +1468,7 @@ function renderEvents(){
     }).join('');
 
     actionItems.forEach(e=>{
-      if(e._source==='event' && e.hasCover && !coverCache[e.id]){
+      if(e.hasCover && !coverCache[e.id]){
         driveLoadCover(e.id).then(dataUrl=>{
           if(!dataUrl) return;
           coverCache[e.id] = dataUrl;
@@ -1470,7 +1476,7 @@ function renderEvents(){
           if(cardEl){
             cardEl.classList.add('has-cover');
             cardEl.style.backgroundImage = `url('${dataUrl}')`;
-            cardEl.style.backgroundPosition = `center ${e.coverPosition||50}%`;
+            cardEl.style.backgroundPosition = `center ${e.coverCardPosition != null ? e.coverCardPosition : 50}%`;
           }
         });
       }
@@ -2625,16 +2631,21 @@ function openNoteDetail(id, source='event'){
   }
   document.getElementById('nd-meta-row').innerHTML = metaHtml;
   document.getElementById('nd-dropdown').classList.remove('open');
-  // Cover — events only
+  // Cover — all sources
   const coverEl = document.getElementById('nd-cover');
-  if(coverEl) coverEl.style.display = source==='event' ? '' : 'none';
-  const hasCoverNow = (source==='event' && e.hasCover);
+  if(coverEl) coverEl.style.display = '';
+  const hasCoverNow = !!e.hasCover;
   document.getElementById('nd-remove-cover-btn').style.display = hasCoverNow ? 'block' : 'none';
   document.getElementById('nd-cover-size-divider').style.display = hasCoverNow ? 'block' : 'none';
   document.getElementById('nd-cover-size-row').style.display = hasCoverNow ? 'block' : 'none';
+  const cardPosRow = document.getElementById('nd-card-pos-row');
+  if(cardPosRow){
+    cardPosRow.style.display = (hasCoverNow && source==='event') ? 'flex' : 'none';
+    if(source==='event') document.getElementById('nd-card-pos-slider').value = (e.coverCardPosition != null) ? e.coverCardPosition : 50;
+  }
   ndUpdateCoverSizeButtons(e.coverSize||'md');
   ndShowCover(null);
-  if(source==='event' && e.hasCover){
+  if(hasCoverNow){
     driveLoadCover(id).then(dataUrl => {
       if(dataUrl && ndEventId === id) ndShowCover(dataUrl);
     });
@@ -2827,21 +2838,31 @@ async function ndDelete(){
 async function ndSetCover(input){
   if(!input.files||!input.files[0]||!ndEventId) return;
   const reader = new FileReader();
-  reader.onload = async function(e){
-    const dataUrl = e.target.result;
-    // Store raw + mark hasCover so crop modal can open
-    events = events.map(ev => ev.id === ndEventId
-      ? Object.assign({}, ev, {hasCover: true, coverRaw: dataUrl, coverSize: 'md'})
-      : ev
-    );
-    coverCache[ndEventId] = dataUrl; // temp until crop confirms
+  reader.onload = async function(ev){
+    const dataUrl = ev.target.result;
+    if(ndItemSource === 'schedule'){
+      schedules = schedules.map(s => s.id === ndEventId
+        ? Object.assign({}, s, {hasCover: true, coverRaw: dataUrl})
+        : s
+      );
+    } else if(ndItemSource === 'routine'){
+      routines = routines.map(r => r.id === ndEventId
+        ? Object.assign({}, r, {hasCover: true, coverRaw: dataUrl})
+        : r
+      );
+    } else {
+      events = events.map(e => e.id === ndEventId
+        ? Object.assign({}, e, {hasCover: true, coverRaw: dataUrl, coverSize: 'md'})
+        : e
+      );
+    }
+    coverCache[ndEventId] = dataUrl;
     document.getElementById('nd-cover-size-divider').style.display = 'block';
     document.getElementById('nd-cover-size-row').style.display = 'block';
-    // Open crop modal immediately
     openCropModal();
   };
   reader.readAsDataURL(input.files[0]);
-  input.value='';
+  input.value = '';
 }
 let coverDragStartY = null;
 let coverDragStartPos = 50;
@@ -2850,13 +2871,28 @@ let coverDragTimer = null;
 // ── ndUpdateCoverSizeButtons is now a no-op (crop replaced S/M/L) ──
 function ndUpdateCoverSizeButtons(size){}
 
+function onCardPosSlider(val){
+  const pos = parseInt(val, 10);
+  // Update event data immediately
+  events = events.map(ev => ev.id === ndEventId
+    ? Object.assign({}, ev, {coverCardPosition: pos})
+    : ev
+  );
+  // Live-update the card in the background without a full re-render
+  const cardEl = document.getElementById('ev-hcard-' + ndEventId);
+  if(cardEl) cardEl.style.backgroundPosition = 'center ' + pos + '%';
+  // Debounced save
+  clearTimeout(coverDragTimer);
+  coverDragTimer = setTimeout(()=>{ driveSaveData(); }, 1000);
+}
+
 // ══════════════════════════════════════
 // CROP MODAL ENGINE
 // ══════════════════════════════════════
 let _cropRawDataUrl = null;   // original full-res image data URL
 let _cropRatio = 2.5;         // current aspect ratio (w/h)
-let _cropZoom = 1;            // 1 = fit, up to 4
-let _cropPanX = 0;            // pan offset in image-pixels
+let _cropZoom = 1;            // 1 = fit, up to 3
+let _cropPanX = 0;            // pan offset in screen px
 let _cropPanY = 0;
 let _cropImgW = 0;            // natural image dimensions
 let _cropImgH = 0;
@@ -2871,11 +2907,16 @@ let _cropDragStartX = null;
 let _cropDragStartY = null;
 let _cropDragPanX = 0;
 let _cropDragPanY = 0;
+let _pinchStartDist = null;
+let _pinchStartZoom = 1;
+let _cropGesturesAttached = false;
 
 function openCropModal(){
   document.getElementById('nd-dropdown').classList.remove('open');
   if(!ndEventId) return;
-  const ev = events.find(x => x.id === ndEventId);
+  const ev = ndItemSource === 'schedule' ? schedules.find(x => x.id === ndEventId)
+           : ndItemSource === 'routine'  ? routines.find(x => x.id === ndEventId)
+           : events.find(x => x.id === ndEventId);
   if(!ev || !ev.hasCover) return;
   // Load raw (pre-crop) if stored, else current cover
   const raw = ev.coverRaw || null;
@@ -2893,7 +2934,7 @@ function openCropModal(){
     b.style.color = active ? '#1a1410' : 'var(--text-sec)';
     b.style.borderColor = active ? 'var(--lime)' : 'var(--border)';
   });
-  document.getElementById('crop-zoom').value = 100;
+  document.getElementById('crop-zoom').value = 0;
   const modal = document.getElementById('crop-modal');
   modal.style.display = 'flex';
   const img = document.getElementById('crop-img');
@@ -2961,7 +3002,9 @@ function _clampCropPan(){
 }
 
 function onCropZoom(val){
-  const newZoom = val / 100;
+  // val is 0–100; map to zoom 1.0–3.0 with quadratic curve so early movement is immediately visible
+  const t = val / 100;
+  const newZoom = 1 + t * t * 2;
   // Keep crop frame center fixed in image space
   const oldS = _cropScale * _cropZoom;
   const newS = _cropScale * newZoom;
@@ -2986,27 +3029,18 @@ function setCropRatio(ratio, btn){
   });
   // Reset zoom & re-init layout
   _cropZoom = 1;
-  document.getElementById('crop-zoom').value = 100;
+  document.getElementById('crop-zoom').value = 0;
   _initCropLayout();
   _renderCropTransform();
 }
 
 function _attachCropGestures(){
+  if(_cropGesturesAttached) return; // only attach once, ever
+  _cropGesturesAttached = true;
   const vp = document.getElementById('crop-viewport');
-  // Remove old listeners by cloning
-  const fresh = vp.cloneNode(true);
-  // Re-append the img
-  fresh.appendChild(document.getElementById('crop-img'));
-  fresh.appendChild(document.getElementById('crop-frame'));
-  vp.parentNode.replaceChild(fresh, vp);
-  // But cloneNode breaks references — simpler: just use named handlers
-  const vp2 = document.getElementById('crop-viewport');
-  vp2.addEventListener('mousedown', _cropPointerDown, {passive:false});
-  vp2.addEventListener('touchstart', _cropPointerDown, {passive:false});
-  // Pinch zoom
-  let _pinchStartDist = null;
-  let _pinchStartZoom = 1;
-  vp2.addEventListener('touchstart', e=>{
+  vp.addEventListener('mousedown', _cropPointerDown, {passive:false});
+  vp.addEventListener('touchstart', _cropPointerDown, {passive:false});
+  vp.addEventListener('touchstart', e=>{
     if(e.touches.length === 2){
       _pinchStartDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
@@ -3015,7 +3049,7 @@ function _attachCropGestures(){
       _pinchStartZoom = _cropZoom;
     }
   }, {passive:true});
-  vp2.addEventListener('touchmove', e=>{
+  vp.addEventListener('touchmove', e=>{
     if(e.touches.length === 2 && _pinchStartDist){
       e.preventDefault();
       const dist = Math.hypot(
@@ -3023,12 +3057,14 @@ function _attachCropGestures(){
         e.touches[0].clientY - e.touches[1].clientY
       );
       const ratio = dist / _pinchStartDist;
-      const newZoom = Math.max(1, Math.min(4, _pinchStartZoom * ratio));
-      document.getElementById('crop-zoom').value = newZoom * 100;
-      onCropZoom(newZoom * 100);
+      const newZoom = Math.max(1, Math.min(3, _pinchStartZoom * ratio));
+      // Convert zoom 1–3 back to slider val 0–100 via inverse of quadratic
+      const t = Math.sqrt((newZoom - 1) / 2);
+      document.getElementById('crop-zoom').value = Math.round(t * 100);
+      onCropZoom(Math.round(t * 100));
     }
   }, {passive:false});
-  vp2.addEventListener('touchend', ()=>{ _pinchStartDist = null; }, {passive:true});
+  vp.addEventListener('touchend', ()=>{ _pinchStartDist = null; }, {passive:true});
 }
 
 function _cropPointerDown(e){
@@ -3085,15 +3121,28 @@ async function confirmCrop(){
     const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
     closeCropModal();
     // Store raw original for re-cropping, save cropped as the cover
-    events = events.map(ev => ev.id === ndEventId
-      ? Object.assign({}, ev, {
-          hasCover: true,
-          coverRaw: _cropRawDataUrl,
-          coverSize: 'md',
-          coverPosition: null
-        })
-      : ev
-    );
+    if(ndItemSource === 'schedule'){
+      schedules = schedules.map(s => s.id === ndEventId
+        ? Object.assign({}, s, {hasCover: true, coverRaw: _cropRawDataUrl})
+        : s
+      );
+    } else if(ndItemSource === 'routine'){
+      routines = routines.map(r => r.id === ndEventId
+        ? Object.assign({}, r, {hasCover: true, coverRaw: _cropRawDataUrl})
+        : r
+      );
+    } else {
+      events = events.map(ev => ev.id === ndEventId
+        ? Object.assign({}, ev, {
+            hasCover: true,
+            coverRaw: _cropRawDataUrl,
+            coverSize: 'md',
+            coverPosition: null,
+            coverCardPosition: null
+          })
+        : ev
+      );
+    }
     coverCache[ndEventId] = croppedDataUrl;
     ndShowCover(croppedDataUrl);
     document.getElementById('nd-remove-cover-btn').style.display = 'block';
@@ -3112,10 +3161,22 @@ async function ndRemoveCover(){
   document.getElementById('nd-dropdown').classList.remove('open');
   driveDeleteCover(ndEventId);
   delete coverCache[ndEventId];
-  events = events.map(ev => ev.id === ndEventId
-    ? Object.assign({}, ev, {hasCover: false, coverPosition: null, coverSize: null, coverRaw: null})
-    : ev
-  );
+  if(ndItemSource === 'schedule'){
+    schedules = schedules.map(s => s.id === ndEventId
+      ? Object.assign({}, s, {hasCover: false, coverRaw: null})
+      : s
+    );
+  } else if(ndItemSource === 'routine'){
+    routines = routines.map(r => r.id === ndEventId
+      ? Object.assign({}, r, {hasCover: false, coverRaw: null})
+      : r
+    );
+  } else {
+    events = events.map(ev => ev.id === ndEventId
+      ? Object.assign({}, ev, {hasCover: false, coverPosition: null, coverCardPosition: null, coverSize: null, coverRaw: null})
+      : ev
+    );
+  }
   ndShowCover(null);
   document.getElementById('nd-remove-cover-btn').style.display = 'none';
   document.getElementById('nd-cover-size-divider').style.display = 'none';
@@ -3133,7 +3194,9 @@ function ndShowCover(dataUrl){
     imgEl.src = dataUrl;
     coverEl.classList.add('has-cover');
     // Apply saved position
-    const ev = events.find(x => x.id === ndEventId);
+    const ev = ndItemSource === 'schedule' ? schedules.find(x => x.id === ndEventId)
+             : ndItemSource === 'routine'  ? routines.find(x => x.id === ndEventId)
+             : events.find(x => x.id === ndEventId);
     const pos = (ev && ev.coverPosition != null) ? ev.coverPosition : 50;
     imgEl.style.objectPosition = `center ${pos}%`;
     // Attach drag listeners (remove old ones first)
@@ -3149,7 +3212,9 @@ function ndShowCover(dataUrl){
 
 function coverDragStart(e){
   e.preventDefault();
-  const ev = events.find(x => x.id === ndEventId);
+  const ev = ndItemSource === 'schedule' ? schedules.find(x => x.id === ndEventId)
+           : ndItemSource === 'routine'  ? routines.find(x => x.id === ndEventId)
+           : events.find(x => x.id === ndEventId);
   coverDragStartPos = (ev && ev.coverPosition != null) ? ev.coverPosition : 50;
   coverDragStartY = e.touches ? e.touches[0].clientY : e.clientY;
   document.onmousemove = coverDragMove;
@@ -3168,11 +3233,23 @@ function coverDragMove(e){
   const deltaPct = (deltaY / coverH) * 100;
   let newPos = Math.max(0, Math.min(100, coverDragStartPos - deltaPct));
   imgEl.style.objectPosition = `center ${newPos}%`;
-  // Save position to event object immediately (no Drive yet)
-  events = events.map(ev => ev.id === ndEventId
-    ? Object.assign({}, ev, {coverPosition: newPos})
-    : ev
-  );
+  // Save position to correct array immediately (no Drive yet)
+  if(ndItemSource === 'schedule'){
+    schedules = schedules.map(s => s.id === ndEventId
+      ? Object.assign({}, s, {coverPosition: newPos})
+      : s
+    );
+  } else if(ndItemSource === 'routine'){
+    routines = routines.map(r => r.id === ndEventId
+      ? Object.assign({}, r, {coverPosition: newPos})
+      : r
+    );
+  } else {
+    events = events.map(ev => ev.id === ndEventId
+      ? Object.assign({}, ev, {coverPosition: newPos})
+      : ev
+    );
+  }
 }
 
 function coverDragEnd(){
