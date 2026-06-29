@@ -80,9 +80,21 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .card-meta{font-size:10px;color:var(--text-dim);display:flex;align-items:center;gap:4px}
 .card-meta svg{width:11px;height:11px}
 .card-tag{font-size:10px;font-weight:700;background:var(--lime-dim);color:var(--lime);padding:2px 8px;border-radius:20px}
-.ev-card-cover{width:calc(100% + 40px);height:120px;margin:-20px -20px 14px -20px;border-radius:18px 18px 0 0;overflow:hidden;flex-shrink:0}
-.ev-card-cover{width:calc(100% + 40px);height:120px;margin:-20px -20px 14px -20px;overflow:hidden;flex-shrink:0}
-.ev-card-cover img{width:100%;height:100%;object-fit:cover;display:block}
+/* ev-hcard cover-as-background */
+.ev-hcard.has-cover{background-size:cover;background-position:center;background-repeat:no-repeat;position:relative}
+.ev-hcard.has-cover::before{content:'';position:absolute;inset:0;border-radius:22px;background:linear-gradient(160deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.72) 100%);pointer-events:none;z-index:0}
+.ev-hcard.has-cover > *{position:relative;z-index:1}
+.ev-hcard.has-cover .ev-title{color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.7)}
+.ev-hcard.has-cover .ev-body{color:rgba(255,255,255,.82);text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.ev-hcard.has-cover .ev-time-lbl{color:rgba(255,255,255,.65)}
+.ev-hcard.has-cover .ev-icon{background:rgba(255,255,255,.15);backdrop-filter:blur(6px)}
+.ev-hcard.has-cover .ev-icon svg{stroke:#fff}
+.ev-hcard.has-cover .ev-tag{background:rgba(255,255,255,.18);color:#fff;backdrop-filter:blur(4px)}
+.ev-hcard.has-cover .ev-action{background:rgba(255,255,255,.2);backdrop-filter:blur(4px)}
+.ev-hcard.has-cover .ev-action svg{stroke:#fff}
+.ev-hcard.has-cover .ev-arrow{background:rgba(255,255,255,.25);backdrop-filter:blur(4px)}
+.ev-hcard.has-cover .ev-arrow svg{stroke:#fff}
+.ev-hcard.has-cover .state-badge{backdrop-filter:blur(4px)}
   
 /* ── Section label ── */
 .slabel{font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin:18px 0 10px}
@@ -503,6 +515,13 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 <div id="app">
   <div id="reconnect-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:200;background:var(--amber);padding:10px 20px;text-align:center;font-size:13px;font-weight:700;color:#1a1410;cursor:pointer" onclick="reconnectGoogle()">
   Session expired — tap here to reconnect Google Drive
+</div>
+<div id="install-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:199;background:var(--bg-card);border-bottom:1px solid var(--border);padding:10px 16px;display:none;align-items:center;justify-content:space-between;gap:10px">
+  <div style="font-size:13px;font-weight:700;color:var(--text-pri)">Install Xperiencer</div>
+  <div style="display:flex;gap:8px">
+    <button onclick="triggerInstall()" style="background:var(--lime);border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:800;color:#1a1410;cursor:pointer;font-family:inherit">Install</button>
+    <button onclick="dismissInstall()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;color:var(--text-dim);cursor:pointer;font-family:inherit">✕</button>
+  </div>
 </div>
 
 <!-- ══ VIEW: EVENTS ══ -->
@@ -1356,14 +1375,12 @@ function renderEvents(){
         : e._source==='routine'
           ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(200,232,50,.12);color:var(--lime);letter-spacing:.05em">ROUTINE</span>`
           : '';
-      const coverHtml = (e._source==='event' && e.hasCover)
-        ? `<div class="ev-card-cover" id="cover-strip-${e.id}">
-            <img src="${coverCache[e.id]||''}" style="object-position:center ${(e.coverPosition||50)}%">
-           </div>`
-        : `<div style="height:134px;margin:-20px -20px 14px -20px;border-radius:18px 18px 0 0;background:var(--bg-card2);flex-shrink:0"></div>`;
+      const hasCover = e._source==='event' && e.hasCover;
+      const coverInlineStyle = (hasCover && coverCache[e.id])
+        ? ` style="background-image:url('${coverCache[e.id]}');background-position:center ${e.coverPosition||50}%"`
+        : '';
       const bodyText = e.body ? e.body.replace(/<[^>]*>/g,'').trim() : '';
-      return `<div class="ev-hcard ${skin}" onclick="${clickFn}">
-        ${coverHtml}
+      return `<div class="ev-hcard ${skin}${hasCover?' has-cover':''}" id="ev-hcard-${e.id}"${coverInlineStyle} onclick="${clickFn}">
         <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[e._timeState]||actionIcons.future}</button>
         <div class="ev-icon">${cardIcons[e._timeState]||cardIcons.future}</div>
         ${typeBadge}
@@ -1386,8 +1403,12 @@ function renderEvents(){
         driveLoadCover(e.id).then(dataUrl=>{
           if(!dataUrl) return;
           coverCache[e.id] = dataUrl;
-          const stripEl = document.getElementById(`cover-strip-${e.id}`);
-          if(stripEl){ const imgEl=stripEl.querySelector('img'); if(imgEl) imgEl.src=dataUrl; }
+          const cardEl = document.getElementById(`ev-hcard-${e.id}`);
+          if(cardEl){
+            cardEl.classList.add('has-cover');
+            cardEl.style.backgroundImage = `url('${dataUrl}')`;
+            cardEl.style.backgroundPosition = `center ${e.coverPosition||50}%`;
+          }
         });
       }
     });
@@ -3173,6 +3194,39 @@ if(getAuthMode() === 'google'){
   selectState('open');
   selectRtType('day');
   renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView();
+}
+
+// ══════════════════════════════════════
+// PWA: INSTALL PROMPT
+// ══════════════════════════════════════
+let _installPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _installPrompt = e;
+  const banner = document.getElementById('install-banner');
+  if(banner) banner.style.display = 'flex';
+});
+
+window.addEventListener('appinstalled', () => {
+  _installPrompt = null;
+  const banner = document.getElementById('install-banner');
+  if(banner) banner.style.display = 'none';
+});
+
+function triggerInstall(){
+  if(!_installPrompt) return;
+  _installPrompt.prompt();
+  _installPrompt.userChoice.then(choice => {
+    _installPrompt = null;
+    const banner = document.getElementById('install-banner');
+    if(banner) banner.style.display = 'none';
+  });
+}
+
+function dismissInstall(){
+  const banner = document.getElementById('install-banner');
+  if(banner) banner.style.display = 'none';
 }
 
 // ══════════════════════════════════════
