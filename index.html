@@ -199,6 +199,15 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 /* ── Event Horizontal Cards ── */
 .ev-scroll{overflow-x:auto;overflow-y:hidden;display:flex;gap:14px;padding:4px 20px 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 .ev-scroll::-webkit-scrollbar{display:none}
+/* ══ Events Tab Two-List Layout ══ */
+.ev-section-title{font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;padding:20px 20px 10px}
+.ev-all-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 100px}
+.ev-all-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:6px;min-height:120px;position:relative;overflow:hidden}
+.ev-all-card:active{transform:scale(.97)}
+.ev-all-card-title{font-size:13px;font-weight:700;color:var(--text-pri);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ev-all-card-body{font-size:11px;color:var(--text-dim);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex:1}
+.ev-all-card-footer{font-size:10px;color:var(--text-dim);font-weight:600;margin-top:auto}
+.ev-all-badge{font-size:8px;font-weight:800;padding:2px 6px;border-radius:20px;letter-spacing:.05em;display:inline-block;margin-bottom:2px}
 .ev-hcard{min-width:255px;max-width:290px;border-radius:22px;padding:20px;flex-shrink:0;cursor:pointer;transition:transform .15s;display:flex;flex-direction:column;min-height:110px;position:relative}
 .ev-hcard:active{transform:scale(.97)}
 .ev-hcard.cream{background:#d4c9a8;color:#2a1f0e}
@@ -378,8 +387,24 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 .tl-spare-dur{font-size:11px;font-weight:700;color:var(--text-dim);text-align:center}
 
 /* ══ Done schedule card ══ */
+.sch-card{background:var(--bg-card2);border:1px solid var(--border);border-radius:14px;padding:12px 14px;cursor:pointer;transition:border-color .15s}
+.sch-card:active{border-color:rgba(200,232,50,.3)}
+.sch-card-title{font-size:14px;font-weight:700;color:var(--text-pri)}
+.sch-done-btn{font-size:11px;font-weight:700;background:var(--lime);color:#1a1410;border:none;border-radius:8px;padding:4px 12px;cursor:pointer;font-family:inherit}
+.sch-card-notes{font-size:12px;color:var(--text-dim);margin-top:2px}
 .sch-card-done{opacity:.5}
 .sch-card-done .sch-card-title{text-decoration:line-through}
+.sch-card-missed{opacity:.4;border-left:3px solid #f87171}
+.sch-card-missed .sch-card-title{color:#f87171}
+
+/* ══ Ready Routines ══ */
+.rr-overlay{position:fixed;inset:0;z-index:200;background:#1e1a14;display:none;flex-direction:column}
+.rr-overlay.open{display:flex}
+.rr-card{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.rr-card:active{transform:scale(.98)}
+.rr-card-name{font-size:14px;font-weight:700;color:var(--text-pri)}
+.rr-card-meta{font-size:11px;color:var(--text-dim);margin-top:2px}
+.rr-apply-btn{font-size:11px;font-weight:700;background:var(--lime);color:#1a1410;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-family:inherit;flex-shrink:0}
 .sch-done-check{position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;background:var(--lime);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sch-done-check svg{width:11px;height:11px;stroke:#1a1410;stroke-width:3;fill:none}
   
@@ -490,19 +515,28 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
       </div>
       <button onclick="openEventSheet()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:8px 14px;color:var(--text-sec);font-size:12px;font-weight:700;cursor:pointer">+ New</button>
     </div>
-    <div class="tab-row">
-      <div id="etab-all" class="vtab on" onclick="switchETab('all')">All</div>
-      <div id="etab-open" class="vtab off" onclick="switchETab('open')">Open</div>
-      <div id="etab-closed" class="vtab off" onclick="switchETab('closed')">Closed</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;padding:0 4px">
+      <div class="tab-row" style="margin-bottom:0">
+        <div id="etab-all" class="vtab on" onclick="switchETab('all')">All</div>
+        <div id="etab-open" class="vtab off" onclick="switchETab('open')">Open</div>
+        <div id="etab-closed" class="vtab off" onclick="switchETab('closed')">Closed</div>
+      </div>
     </div>
   </div>
   <div style="flex:1;overflow:hidden;display:flex;flex-direction:column" id="events-scroll">
-    <div class="ev-scroll" id="events-list"></div>
-    <div class="empty" id="events-empty" style="display:none">
-      <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-      No events yet. Tap + to add one.
+    <!-- Action List -->
+    <div style="padding:0 20px 6px">
+      <div style="font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Action List <span id="action-count" style="font-weight:400;opacity:.6"></span></div>
     </div>
-    <div id="deletion-log-section" style="padding:0 20px 100px"></div>
+    <div class="ev-scroll" id="events-list"></div>
+    <div class="empty" id="events-empty" style="display:none;margin:0 20px">
+      <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      No events yet.
+    </div>
+    <!-- All List -->
+    <div class="ev-section-title">All List</div>
+    <div class="ev-all-grid" id="ev-all-grid"></div>
+    <div id="deletion-log-section" style="padding:0 20px 20px"></div>
   </div>
 </div>
 
@@ -514,7 +548,10 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
         <div style="font-size:12px;color:var(--text-sec)">Xperiencer</div>
         <div style="font-size:22px;font-weight:800;color:var(--text-pri)">Schedule</div>
       </div>
-      <button onclick="openScheduleSheet()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:8px 14px;color:var(--text-sec);font-size:12px;font-weight:700;cursor:pointer">+ Add</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="openScheduleSheet()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:8px 14px;color:var(--text-sec);font-size:12px;font-weight:700;cursor:pointer">+ Add</button>
+        <button id="sch-filter-btn" onclick="toggleSchFilter()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text-sec);font-size:11px;font-weight:700;cursor:pointer;margin-left:2px">All</button>
+      </div>
     </div>
     <div class="cal-strip">
       <div class="cal-strip-top">
@@ -528,13 +565,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     </div>
     <div style="font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px" id="sch-day-label"></div>
   </div>
-  <div class="sb" style="padding:0 20px">
-    <div id="schedule-list"></div>
-    <div class="empty" id="schedule-empty" style="display:none">
-      <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-      Nothing scheduled. Tap + to add.
-    </div>
-  </div>
+  <div class="tl-container" id="sch-list"></div>
 </div>
 
 <!-- ══ VIEW: ROUTINE ══ -->
@@ -545,13 +576,16 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
         <div style="font-size:12px;color:var(--text-sec)">Xperiencer</div>
         <div style="font-size:22px;font-weight:800;color:var(--text-pri)">Routine</div>
       </div>
-      <button onclick="openRoutineSheet()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:8px 14px;color:var(--text-sec);font-size:12px;font-weight:700;cursor:pointer">+ New</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="openRROverlay()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:8px 14px;color:var(--text-sec);font-size:12px;font-weight:700;cursor:pointer">Templates</button>
+        <button onclick="openRoutineSheet()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:8px 14px;color:var(--text-sec);font-size:12px;font-weight:700;cursor:pointer">+ New</button>
+      </div>
     </div>
     <div id="routine-streak-row" style="display:flex;gap:10px;margin-bottom:4px"></div>
   </div>
   <div class="sb" style="padding:0 20px">
     <div class="slabel" id="routine-date-label"></div>
-    <div id="routine-list"></div>
+    <div class="tl-container" id="routine-list"></div>
     <div class="empty" id="routine-empty" style="display:none">
       <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
       No routines yet. Tap + to add one.
@@ -666,7 +700,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 <div class="overlay" id="routine-overlay" onclick="closeOverlay('routine-overlay',event)">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <div class="sheet-title">New Routine</div>
+    <div class="sheet-title" id="rt-sheet-title">New Routine</div>
     <div class="field-label">Title</div>
     <input class="inp" id="rt-title" placeholder="e.g. Morning workout">
     <div class="field-label">Time</div>
@@ -695,6 +729,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
       <input class="inp" id="rt-month-dates" placeholder="e.g. 1,15,28">
     </div>
     <button class="sheet-btn" onclick="saveRoutine()">Save Routine</button>
+    <button class="sheet-btn danger" id="rt-delete-btn" onclick="deleteRoutine()" style="display:none">Delete Routine</button>
   </div>
 </div>
 
@@ -799,6 +834,44 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
   </div>
 </div>
 
+<!-- ══ CALENDAR ARCHIVE OVERLAY ══ -->
+<div id="cal-archive-overlay" style="display:none;position:fixed;inset:0;z-index:300;background:#1e1a14;flex-direction:column">
+  <div style="padding:max(env(safe-area-inset-top),14px) 20px 12px;display:flex;align-items:center;gap:12px;flex-shrink:0;border-bottom:1px solid var(--border)">
+    <button onclick="closeCalArchive()" style="width:36px;height:36px;border-radius:50%;background:var(--bg-card2);border:none;color:var(--text-pri);cursor:pointer;display:flex;align-items:center;justify-content:center">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    </button>
+    <div>
+      <div id="cal-archive-date" style="font-size:16px;font-weight:800;color:var(--text-pri)"></div>
+      <div style="font-size:11px;color:var(--text-dim)">Completed & missed</div>
+    </div>
+  </div>
+  <div id="cal-archive-list" style="flex:1;overflow-y:auto;padding:20px;scrollbar-width:none"></div>
+</div>
+
+<!-- ══ READY ROUTINES OVERLAY ══ -->
+<div class="rr-overlay" id="rr-overlay">
+  <div style="padding:max(env(safe-area-inset-top),14px) 20px 12px;display:flex;align-items:center;gap:12px;flex-shrink:0;border-bottom:1px solid var(--border)">
+    <button onclick="closeRROverlay()" style="width:36px;height:36px;border-radius:50%;background:var(--bg-card2);border:none;color:var(--text-pri);cursor:pointer;display:flex;align-items:center;justify-content:center">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    </button>
+    <div style="font-size:18px;font-weight:800;color:var(--text-pri)">Ready Routines</div>
+    <button onclick="promptSaveReadyRoutine()" style="margin-left:auto;background:var(--lime);color:#1a1410;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">+ Save current</button>
+  </div>
+  <div id="rr-list" style="flex:1;overflow-y:auto;padding:20px;scrollbar-width:none"></div>
+</div>
+
+<!-- ══ SAVE READY ROUTINE PROMPT ══ -->
+<div id="rr-name-prompt" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.7);align-items:center;justify-content:center">
+  <div style="background:var(--bg-card);border-radius:20px;padding:24px;width:min(320px,90vw)">
+    <div style="font-size:16px;font-weight:800;color:var(--text-pri);margin-bottom:16px">Name this Ready Routine</div>
+    <input id="rr-name-input" class="inp" placeholder="e.g. Morning Flow, Work Day…" style="margin-bottom:16px">
+    <div style="display:flex;gap:10px">
+      <button onclick="cancelSaveRR()" style="flex:1;background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text-sec);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Cancel</button>
+      <button onclick="confirmSaveRR()" style="flex:1;background:var(--lime);border:none;border-radius:10px;padding:10px;color:#1a1410;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 </div>
 
@@ -833,8 +906,13 @@ async function enterApp(){
       routines    = data.routines    || [];
       completions = data.completions || {};
       deletionLog = data.deletionLog || [];
+      doneSchedules = data.doneSchedules || {};
+      lastResetDate = data.lastResetDate || '';
+      window.calendarArchive = data.calendarArchive || [];
+      readyRoutines = data.readyRoutines || [];
     }
   }
+  checkDailyReset();
   schSelDate = todayStr();
   calSelDate = todayStr();
   selectState('open');
@@ -898,7 +976,7 @@ function driveFileName(){
 
 async function driveSaveData(){
   if(!driveAccessToken || !driveFolderId) return;
-  const payload = JSON.stringify({ events, schedules, routines, completions, deletionLog });
+  const payload = JSON.stringify({ events, schedules, routines, completions, deletionLog, doneSchedules, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines });
   const fileName = driveFileName();
   // Upload new data file
   const meta = { name: fileName, parents: [driveFolderId] };
@@ -1015,10 +1093,20 @@ let schedules   = [];
 let routines    = [];
 let completions = {};
 let deletionLog = [];
+let schFilterScheduleOnly = false;
+let actionListIds = [];
+let readyRoutines = [];
+let doneSchedules = {};
+let lastResetDate = '';
+let schAutoScrollEnabled = true;
+let rtAutoScrollEnabled  = true;
+let schScrollTimer       = null;
+let rtScrollTimer        = null;
 let curView   = 'events';
 let eTab      = 'all';
 let editingEv = null;
 let editingSc = null;
+let editingRt = null;
 let evState   = 'open';
 let rtType    = 'day';
 let schWeekOff = 0;   // weeks from today
@@ -1156,8 +1244,8 @@ function showView(name){
   if(nm[name]) document.getElementById(nm[name]).classList.add('active');
   curView=name;
   if(name==='events')   renderEvents();
-  if(name==='schedule') {renderSchStrip();renderSchedule();}
-  if(name==='routine')  renderRoutine();
+  if(name==='schedule') { renderSchStrip(); schAutoScrollEnabled = true; renderSchedule(); }
+  if(name==='routine')  { rtAutoScrollEnabled = true; renderRoutine(); }
   if(name==='calendar') renderCalView();
 }
 
@@ -1180,11 +1268,16 @@ function switchETab(t){
 
 function renderEvents(){
   const today = todayStr();
+
+  // ── Build unified item pools ──
+  const evItems = events.map(e=>({...e, _source:'event', _timeState:calcTimeState(e.date)}));
+
   const schItems = schedules.map(s=>({
     ...s, _source:'schedule',
     _timeState: calcTimeState(s.date),
     openState:'open', body: s.notes||'', tag:''
   }));
+
   const rtItems = routines
     .filter(r=>routineAppliesOn(r,today))
     .map(r=>({
@@ -1193,23 +1286,34 @@ function renderEvents(){
       _timeState: getEventState(today,r.time,r.dur),
       openState:'open', body: r.description||'', tag:''
     }));
-  const allItems = [...events.map(e=>({...e,_source:'event',_timeState:calcTimeState(e.date)})), ...schItems, ...rtItems];
-  let list = eTab==='all' ? allItems
-    : eTab==='open' ? allItems.filter(e=>(e.openState||'open')==='open')
-    : allItems.filter(e=>(e.openState||'open')==='closed');
-  list.sort((a,b)=>{
-    const ord={present:0,future:1,past:2};
-    const ta=ord[a._timeState]??3, tb=ord[b._timeState]??3;
-    if(ta!==tb) return ta-tb;
-    if(!a.date&&!b.date) return 0;
-    if(!a.date) return 1;
-    if(!b.date) return -1;
-    return a.date>b.date?1:-1;
-  });
-  const el=document.getElementById('events-list');
-  const em=document.getElementById('events-empty');
-  if(!list.length){el.innerHTML='';em.style.display='block';return;}
-  em.style.display='none';
+
+  // ── ACTION LIST (max 24, open events + upcoming sch/rt) ──
+  const openEvents = evItems
+    .filter(e=>{
+      if(eTab==='open') return (e.openState||'open')==='open';
+      if(eTab==='closed') return (e.openState||'open')==='closed';
+      return true;
+    })
+    .sort((a,b)=>{
+      const ord={present:0,future:1,past:2};
+      const ta=ord[a._timeState]??3, tb=ord[b._timeState]??3;
+      if(ta!==tb) return ta-tb;
+      const da = a.updatedAt||a.createdAt||'';
+      const db = b.updatedAt||b.createdAt||'';
+      return db>da?1:-1;
+    });
+
+  const upcomingSchRt = [...schItems, ...rtItems]
+    .filter(e=>e._timeState==='present'||e._timeState==='future')
+    .sort((a,b)=>tlTimeToMin(a.time)-tlTimeToMin(b.time));
+
+  const actionItems = eTab==='closed' ? openEvents.slice(0,24) : [...openEvents, ...upcomingSchRt].slice(0,24);
+
+  const countEl = document.getElementById('action-count');
+  if(countEl) countEl.textContent = `(${actionItems.length}/24)`;
+
+  const el = document.getElementById('events-list');
+  const emptyEl = document.getElementById('events-empty');
 
   const cardIcons={
     past:`<svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
@@ -1222,73 +1326,113 @@ function renderEvents(){
     future:`<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`
   };
 
-  el.innerHTML=list.map((e,i)=>{
-    const skin=i%2===0?'cream':'dark';
-    const tags=(e.tag||'').split(' ').filter(Boolean);
-    const timeLbl=e.date?(()=>{
-      const d=new Date(e.date+'T00:00:00');
-      const now=new Date();
-      const diff=Math.round((d-now)/(1000*60*60*24));
-      if(diff===0) return 'Today'+(e.time?' at '+fmtTime(e.time):'');
-      if(diff===1) return 'Tomorrow'+(e.time?' at '+fmtTime(e.time):'');
-      if(diff===-1) return 'Yesterday';
-      return e.date+(e.time?' · '+fmtTime(e.time):'');
-    })():'';
-    const clickFn = e._source==='schedule'
-      ? `openScheduleSheet('${e.id}')`
-      : e._source==='routine'
-        ? `openRoutineSheet('${e.id}')`
-        : `openNoteDetail('${e.id}')`;
-    const typeBadge = e._source==='schedule'
-      ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:var(--bg-input);color:var(--text-sec);letter-spacing:.05em">SCHEDULE</span>`
-      : e._source==='routine'
-        ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:var(--green-dim,rgba(100,200,100,.12));color:var(--lime);letter-spacing:.05em">ROUTINE</span>`
-        : '';
-    const coverHtml = (e._source==='event' && e.hasCover)
-      ? `<div class="ev-card-cover" id="cover-strip-${e.id}">
-          <img src="${coverCache[e.id]||''}" style="object-position:center ${(e.coverPosition||50)}%">
-         </div>`
-      : `<div style="height:134px;margin:-20px -20px 14px -20px;border-radius:18px 18px 0 0;background:var(--bg-card2);flex-shrink:0"></div>`;
-    const bodyText = e.body ? e.body.replace(/<[^>]*>/g,'').trim() : '';
-    return `<div class="ev-hcard ${skin}" onclick="${clickFn}">
-      ${coverHtml}
-      <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[e._timeState]||actionIcons.future}</button>
-      <div class="ev-icon">${cardIcons[e._timeState]||cardIcons.future}</div>
-      ${typeBadge}
-      <div class="ev-title">${esc(e.title)}</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px">
-        ${e._timeState?`<span class="state-badge ${e._timeState}">${{past:'Past',present:'Present',future:'Future'}[e._timeState]}</span>`:''}
-        ${e._source==='event'?`<span class="state-badge" style="background:${(e.openState||'open')==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${(e.openState||'open')==='closed'?'var(--red)':'var(--lime)'};font-weight:800">${(e.openState||'open')==='closed'?'Closed':'Open'}</span>`:''}
-      </div>
-      ${tags.length?`<div class="ev-tags">${tags.map(t=>`<span class="ev-tag">${esc(t)}</span>`).join('')}</div>`:''}
-      ${bodyText?`<div class="ev-body">${esc(bodyText)}</div>`:'<div class="ev-body" style="flex:1"></div>'}
-      <div class="ev-footer">
-        <span class="ev-time-lbl">${timeLbl}</span>
-        <div class="ev-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
-      </div>
-    </div>`;
-  }).join('');
+  if(!actionItems.length){
+    el.innerHTML='';
+    if(emptyEl) emptyEl.style.display='flex';
+  } else {
+    if(emptyEl) emptyEl.style.display='none';
+    el.innerHTML = actionItems.map((e,i)=>{
+      const skin=i%2===0?'cream':'dark';
+      const tags=(e.tag||'').split(' ').filter(Boolean);
+      const timeLbl=e.date?(()=>{
+        const d=new Date(e.date+'T00:00:00');
+        const now=new Date();
+        const diff=Math.round((d-now)/(1000*60*60*24));
+        if(diff===0) return 'Today'+(e.time?' at '+fmtTime(e.time):'');
+        if(diff===1) return 'Tomorrow'+(e.time?' at '+fmtTime(e.time):'');
+        if(diff===-1) return 'Yesterday';
+        return e.date+(e.time?' · '+fmtTime(e.time):'');
+      })():'';
+      const clickFn = e._source==='schedule'
+        ? `openNoteDetail('${e.id}','schedule')`
+        : e._source==='routine'
+          ? `openNoteDetail('${e.id}','routine')`
+          : `openNoteDetail('${e.id}')`;
+      const typeBadge = e._source==='schedule'
+        ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:var(--bg-input);color:var(--text-sec);letter-spacing:.05em">SCHEDULE</span>`
+        : e._source==='routine'
+          ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(200,232,50,.12);color:var(--lime);letter-spacing:.05em">ROUTINE</span>`
+          : '';
+      const coverHtml = (e._source==='event' && e.hasCover)
+        ? `<div class="ev-card-cover" id="cover-strip-${e.id}">
+            <img src="${coverCache[e.id]||''}" style="object-position:center ${(e.coverPosition||50)}%">
+           </div>`
+        : `<div style="height:134px;margin:-20px -20px 14px -20px;border-radius:18px 18px 0 0;background:var(--bg-card2);flex-shrink:0"></div>`;
+      const bodyText = e.body ? e.body.replace(/<[^>]*>/g,'').trim() : '';
+      return `<div class="ev-hcard ${skin}" onclick="${clickFn}">
+        ${coverHtml}
+        <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[e._timeState]||actionIcons.future}</button>
+        <div class="ev-icon">${cardIcons[e._timeState]||cardIcons.future}</div>
+        ${typeBadge}
+        <div class="ev-title">${esc(e.title)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px">
+          ${e._timeState?`<span class="state-badge ${e._timeState}">${{past:'Past',present:'Present',future:'Future'}[e._timeState]}</span>`:''}
+          ${e._source==='event'?`<span class="state-badge" style="background:${(e.openState||'open')==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${(e.openState||'open')==='closed'?'var(--red)':'var(--lime)'};font-weight:800">${(e.openState||'open')==='closed'?'Closed':'Open'}</span>`:''}
+        </div>
+        ${tags.length?`<div class="ev-tags">${tags.map(t=>`<span class="ev-tag">${esc(t)}</span>`).join('')}</div>`:''}
+        ${bodyText?`<div class="ev-body">${esc(bodyText)}</div>`:'<div class="ev-body" style="flex:1"></div>'}
+        <div class="ev-footer">
+          <span class="ev-time-lbl">${timeLbl}</span>
+          <div class="ev-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+        </div>
+      </div>`;
+    }).join('');
 
-  // Load covers gradually after cards render — events only
-  list.forEach(e => {
-    if(e._source==='event' && e.hasCover && !coverCache[e.id]){
-      driveLoadCover(e.id).then(dataUrl => {
-        if(!dataUrl) return;
-        coverCache[e.id] = dataUrl;
-        const stripEl = document.getElementById(`cover-strip-${e.id}`);
-        if(stripEl){
-          const imgEl = stripEl.querySelector('img');
-          if(imgEl) imgEl.src = dataUrl;
-        }
-      });
-    }
+    actionItems.forEach(e=>{
+      if(e._source==='event' && e.hasCover && !coverCache[e.id]){
+        driveLoadCover(e.id).then(dataUrl=>{
+          if(!dataUrl) return;
+          coverCache[e.id] = dataUrl;
+          const stripEl = document.getElementById(`cover-strip-${e.id}`);
+          if(stripEl){ const imgEl=stripEl.querySelector('img'); if(imgEl) imgEl.src=dataUrl; }
+        });
+      }
+    });
+  }
+
+  // ── ALL LIST (2-column grid, newest first) ──
+  const allEvs = [...evItems].sort((a,b)=>{
+    const da=a.updatedAt||a.createdAt||'';
+    const db=b.updatedAt||b.createdAt||'';
+    return db>da?1:-1;
   });
+  const allSch = schItems.filter(s=>(s.notes||'').trim().length>0);
+  const allRt  = rtItems.filter(r=>(r.body||'').trim().length>0);
+  const allItems = [...allEvs, ...allSch, ...allRt];
 
-  // Render deletion log
+  const gridEl = document.getElementById('ev-all-grid');
+  if(gridEl){
+    if(!allItems.length){
+      gridEl.innerHTML = `<div style="grid-column:1/-1;padding:40px 0;text-align:center;color:var(--text-dim);font-size:13px">Nothing here yet.</div>`;
+    } else {
+      gridEl.innerHTML = allItems.map(e=>{
+        const clickFn = e._source==='schedule'
+          ? `openNoteDetail('${e.id}','schedule')`
+          : e._source==='routine'
+            ? `openNoteDetail('${e.id}','routine')`
+            : `openNoteDetail('${e.id}')`;
+        const typeBadge = e._source==='schedule'
+          ? `<span class="ev-all-badge" style="background:var(--bg-input);color:var(--text-dim)">SCHEDULE</span>`
+          : e._source==='routine'
+            ? `<span class="ev-all-badge" style="background:rgba(200,232,50,.12);color:var(--lime)">ROUTINE</span>`
+            : '';
+        const bodyText = (e.body||'').replace(/<[^>]*>/g,'').trim();
+        const timeLbl = e.date ? e.date+(e.time?' · '+fmtTime(e.time):'') : '';
+        return `<div class="ev-all-card" onclick="${clickFn}">
+          ${typeBadge}
+          <div class="ev-all-card-title">${esc(e.title||'Untitled')}</div>
+          ${bodyText?`<div class="ev-all-card-body">${esc(bodyText)}</div>`:''}
+          <div class="ev-all-card-footer">${timeLbl}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ── Deletion log ──
   const logEl = document.getElementById('deletion-log-section');
   if(logEl && deletionLog.length){
     logEl.innerHTML = `
-      <div style="font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin:24px 0 12px">Deleted</div>
+      <div style="font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin:24px 0 12px;padding:0 4px">Deleted</div>
       ${deletionLog.map(d=>{
         const date = new Date(d.deletedAt);
         const ts = date.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
@@ -1303,7 +1447,7 @@ function renderEvents(){
       }).join('')}
     `;
   } else if(logEl){
-    logEl.innerHTML = '';
+    logEl.innerHTML='';
   }
 }
 
@@ -1465,18 +1609,116 @@ function uniCard(item, onclick){
 }
 
 function renderSchedule(){
-  const ds=schSelDate;
-  document.getElementById('sch-day-label').textContent=friendlyDate(ds);
-  const items=getSchedulesOnDate(ds);
-  const el=document.getElementById('schedule-list');
-  const em=document.getElementById('schedule-empty');
-  if(!items.length){el.innerHTML='';em.style.display='block';return;}
-  em.style.display='none';
-  el.innerHTML=items.map(item=>{
-    const isRoutine=item._type==='routine';
-    const onclick=isRoutine?`openRoutineDetail('${item.id}')`:`openScheduleSheet('${item.id}')`;
-    return uniCard(item, onclick);
+  const el = document.getElementById('sch-list');
+  if(!el) return;
+  const ds = schSelDate;
+  document.getElementById('sch-day-label').textContent = friendlyDate(ds);
+  const dayItems = schedules
+    .filter(s => s.date === ds)
+    .map(s => ({
+      id: s.id,
+      title: s.title,
+      time: s.time,
+      dur: s.dur||60,
+      notes: s.notes||'',
+      done: doneSchedules[s.id+'_'+ds] === true,
+      missed: doneSchedules[s.id+'_'+ds] === 'missed',
+      _type:'schedule'
+    }));
+  const todayRoutines = routines
+    .filter(r => routineAppliesOn(r, ds))
+    .map(r => ({
+      id: r.id,
+      title: r.title,
+      time: r.time,
+      dur: r.dur||30,
+      notes: r.description||'',
+      done: completions[r.id+'_'+ds] === true,
+      missed: completions[r.id+'_'+ds] === 'missed',
+      _type:'routine'
+    }));
+  const allItems = schFilterScheduleOnly ? [...dayItems] : [...dayItems, ...todayRoutines];
+
+  if(!allItems.length){
+    el.innerHTML = `<div class="empty"><svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>No items for this day.</div>`;
+    return;
+  }
+
+  const rows = tlBuildRows(allItems);
+
+  el.innerHTML = rows.map(row => {
+    if(row.type === 'spare'){
+      return `<div class="tl-row">
+        <div class="tl-left">
+          <span class="tl-time-start">${tlFmtTime(row.startTime)}</span>
+          <span class="tl-dur-label">${tlFmtDur(row.dur)}</span>
+          <span class="tl-time-end">${tlFmtTime(row.endTime)}</span>
+        </div>
+        <div class="tl-line"></div>
+        <div class="tl-card-wrap">
+          <div class="tl-spare">
+            <span class="tl-spare-time">${tlFmtTime(row.startTime)}</span>
+            <span class="tl-spare-dur">${tlFmtDur(row.dur)} free</span>
+            <span class="tl-spare-time">${tlFmtTime(row.endTime)}</span>
+          </div>
+        </div>
+      </div>`;
+    }
+    const endT = tlEndTime(row.time, row.dur);
+    const isRoutine = row._type === 'routine';
+    const doneClass = row.done ? 'sch-card-done' : row.missed ? 'sch-card-missed' : '';
+    const doneCheck = row.done
+      ? `<div class="sch-done-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>`
+      : '';
+    const typeBadge = isRoutine
+      ? `<span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;background:rgba(200,232,50,.12);color:var(--lime);letter-spacing:.05em">ROUTINE</span>`
+      : '';
+    return `<div class="tl-row">
+      <div class="tl-left">
+        <span class="tl-time-start">${tlFmtTime(row.time)}</span>
+        <span class="tl-dur-label">${tlFmtDur(row.dur)}</span>
+        <span class="tl-time-end">${tlFmtTime(endT)}</span>
+      </div>
+      <div class="tl-line"></div>
+      <div class="tl-card-wrap">
+        <div class="sch-card ${doneClass}" style="position:relative" onclick="${isRoutine?`toggleRoutineFromSch('${row.id}','${ds}')`:`openScheduleSheet('${row.id}')`}">
+          ${doneCheck}
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            ${typeBadge}
+            <span class="sch-card-title">${esc(row.title)}</span>
+          </div>
+          ${row.notes?`<div class="sch-card-notes">${esc(row.notes)}</div>`:''}
+          <div style="display:flex;gap:8px;margin-top:6px">
+            ${!row.done && !isRoutine?`<button class="sch-done-btn" onclick="event.stopPropagation();markScheduleDone('${row.id}')">✓ Done</button>`:''}
+            ${!row.done && isRoutine?`<button class="sch-done-btn" onclick="event.stopPropagation();toggleRoutineFromSch('${row.id}','${ds}')">✓ Done</button>`:''}
+          </div>
+        </div>
+      </div>
+    </div>`;
   }).join('');
+
+  // Auto scroll after render
+  const schRows = tlBuildRows(
+    schedules.filter(s=>s.date===schSelDate).map(s=>({...s,dur:s.dur||60}))
+    .concat(schFilterScheduleOnly ? [] : routines.filter(r=>routineAppliesOn(r,schSelDate)).map(r=>({...r,dur:r.dur||30})))
+  );
+  clearInterval(schScrollTimer);
+  if(schAutoScrollEnabled) setTimeout(()=>tlAutoScroll('sch-list', schRows), 50);
+  schScrollTimer = setInterval(()=>{
+    if(schAutoScrollEnabled) tlAutoScroll('sch-list', schRows);
+  }, 60000);
+
+  const schEl = document.getElementById('sch-list');
+  if(schEl){
+    schEl.onscroll = ()=>{
+      schAutoScrollEnabled = false;
+      clearTimeout(schEl._scrollPauseTimer);
+      schEl._scrollPauseTimer = setTimeout(()=>{
+        schAutoScrollEnabled = true;
+        tlAutoScroll('sch-list', schRows);
+      }, 30000);
+    };
+  }
 }
 
  // ══ Timeline Helpers ══
@@ -1509,6 +1751,32 @@ function tlEndTime(startTime, durMin){
   const h = Math.floor(end/60) % 24;
   const m = end % 60;
   return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+// ══ Auto Scroll ══
+function tlGetCurrentRowIndex(rows){
+  const now = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+  for(let i=0; i<rows.length; i++){
+    const row = rows[i];
+    if(row.type !== 'item') continue;
+    const startMin = tlTimeToMin(row.time);
+    const endMin   = startMin + (row.dur||0);
+    if(endMin > nowMin) return i;
+  }
+  return rows.length - 1;
+}
+
+function tlAutoScroll(containerId, rows){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  const idx = tlGetCurrentRowIndex(rows);
+  const rowEls = el.querySelectorAll('.tl-row');
+  if(!rowEls[idx]) return;
+  const containerTop = el.getBoundingClientRect().top;
+  const rowTop = rowEls[idx].getBoundingClientRect().top;
+  const scrollTarget = el.scrollTop + (rowTop - containerTop) - 16;
+  el.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
 }
 
 function tlBuildRows(items){
@@ -1633,46 +1901,285 @@ function showConflict(boxId,before,after,onPick){
 // ROUTINE VIEW
 // ══════════════════════════════════════
 function renderRoutine(){
-  const today=todayStr();
-  document.getElementById('routine-date-label').textContent=friendlyDate(today);
-  const todayRoutines=routines.filter(r=>routineAppliesOn(r,today))
-    .sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
-  const el=document.getElementById('routine-list');
-  const em=document.getElementById('routine-empty');
-  if(!todayRoutines.length){el.innerHTML='';em.style.display='block';return;}
-  em.style.display='none';
+  const today = todayStr();
+  document.getElementById('routine-date-label').textContent = friendlyDate(today);
+  const el = document.getElementById('routine-list');
+  const em = document.getElementById('routine-empty');
+  if(!el) return;
 
-  el.innerHTML=todayRoutines.map(r=>{
-    const key=r.id+'_'+today;
-    const done=!!completions[key];
-    const repeatLbl=r.repeatType==='day'?r.days.map(d=>DAYS_SHORT[d]).join(' '):'Dates: '+r.dates.join(', ');
-    return`<div class="uni-card${done?' uni-card-done':''}" onclick="toggleRoutine('${r.id}','${today}')">
-      <div class="uni-card-top">
-        <div class="uni-check${done?' done':''}">
-          <svg fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
+  const todayRoutines = routines
+    .filter(r => routineAppliesOn(r, today))
+    .map(r => ({
+      id: r.id,
+      title: r.title,
+      time: r.time,
+      dur: r.dur||30,
+      notes: r.description||'',
+      done: completions[r.id+'_'+today] === true,
+      missed: completions[r.id+'_'+today] === 'missed',
+      _type:'routine'
+    }));
+
+  if(!todayRoutines.length){
+    el.innerHTML='';
+    if(em) em.style.display='block';
+    return;
+  }
+  if(em) em.style.display='none';
+
+  const rows = tlBuildRows(todayRoutines);
+
+  el.innerHTML = rows.map(row => {
+    if(row.type === 'spare'){
+      return `<div class="tl-row">
+        <div class="tl-left">
+          <span class="tl-time-start">${tlFmtTime(row.startTime)}</span>
+          <span class="tl-dur-label">${tlFmtDur(row.dur)}</span>
+          <span class="tl-time-end">${tlFmtTime(row.endTime)}</span>
         </div>
-        <div style="flex:1;min-width:0">
-          <div class="uni-card-title${done?' uni-card-title-done':''}">${esc(r.title)}</div>
+        <div class="tl-line"></div>
+        <div class="tl-card-wrap">
+          <div class="tl-spare">
+            <span class="tl-spare-time">${tlFmtTime(row.startTime)}</span>
+            <span class="tl-spare-dur">${tlFmtDur(row.dur)} free</span>
+            <span class="tl-spare-time">${tlFmtTime(row.endTime)}</span>
+          </div>
         </div>
-        <div class="uni-type-badge" style="background:var(--green-dim);color:var(--green)">Routine</div>
+      </div>`;
+    }
+    const endT = tlEndTime(row.time, row.dur);
+    const doneClass = row.done ? 'sch-card-done' : row.missed ? 'sch-card-missed' : '';
+    const doneCheck = row.done
+      ? `<div class="sch-done-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>`
+      : '';
+    return `<div class="tl-row">
+      <div class="tl-left">
+        <span class="tl-time-start">${tlFmtTime(row.time)}</span>
+        <span class="tl-dur-label">${tlFmtDur(row.dur)}</span>
+        <span class="tl-time-end">${tlFmtTime(endT)}</span>
       </div>
-      ${r.description?`<div class="uni-card-desc">${esc(r.description)}</div>`:''}
-      <div class="uni-card-footer">
-        <div class="uni-card-meta">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          ${fmtTime(r.time)} — ${fmtTimeEnd(r.time,r.dur)} · ${r.dur}min
-        </div>
-        <div class="uni-card-meta">
-          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          ${repeatLbl}
+      <div class="tl-line"></div>
+      <div class="tl-card-wrap">
+        <div class="sch-card ${doneClass}" style="position:relative" onclick="toggleRoutineCheck('${row.id}','${today}')">
+          ${doneCheck}
+          <div class="sch-card-title">${esc(row.title)}</div>
+          ${row.notes?`<div class="sch-card-notes">${esc(row.notes)}</div>`:''}
+          ${!row.done && !row.missed?`<button class="sch-done-btn" onclick="event.stopPropagation();toggleRoutineCheck('${row.id}','${today}')">✓ Done</button>`:''}
+          <button onclick="event.stopPropagation();openRoutineSheet('${row.id}')" style="position:absolute;top:10px;right:10px;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;display:flex;align-items:center;justify-content:center">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
         </div>
       </div>
     </div>`;
   }).join('');
 
-  const done=todayRoutines.filter(r=>completions[r.id+'_'+today]).length;
+  const done = todayRoutines.filter(r=>r.done).length;
   document.getElementById('routine-streak-row').innerHTML=
     `<div style="font-size:12px;color:var(--text-sec)">${done}/${todayRoutines.length} done today</div>`;
+
+  // Auto scroll after render
+  const rtRows = tlBuildRows(
+    routines.filter(r=>routineAppliesOn(r,today)).map(r=>({...r,dur:r.dur||30}))
+  );
+  clearInterval(rtScrollTimer);
+  if(rtAutoScrollEnabled) setTimeout(()=>tlAutoScroll('routine-list', rtRows), 50);
+  rtScrollTimer = setInterval(()=>{
+    if(rtAutoScrollEnabled) tlAutoScroll('routine-list', rtRows);
+  }, 60000);
+
+  const rtEl = document.getElementById('routine-list');
+  if(rtEl){
+    rtEl.onscroll = ()=>{
+      rtAutoScrollEnabled = false;
+      clearTimeout(rtEl._scrollPauseTimer);
+      rtEl._scrollPauseTimer = setTimeout(()=>{
+        rtAutoScrollEnabled = true;
+        tlAutoScroll('routine-list', rtRows);
+      }, 30000);
+    };
+  }
+}
+
+// ══ READY ROUTINES ══
+function openRROverlay(){
+  renderRRList();
+  document.getElementById('rr-overlay').classList.add('open');
+}
+
+function closeRROverlay(){
+  document.getElementById('rr-overlay').classList.remove('open');
+}
+
+function renderRRList(){
+  const el = document.getElementById('rr-list');
+  if(!readyRoutines.length){
+    el.innerHTML = `<div style="padding:40px 0;text-align:center;color:var(--text-dim);font-size:13px">No Ready Routines saved yet.<br>Tap "+ Save current" to save your routines as a template.</div>`;
+    return;
+  }
+  el.innerHTML = readyRoutines.map(rr=>`
+    <div class="rr-card">
+      <div style="flex:1;min-width:0">
+        <div class="rr-card-name">${esc(rr.name)}</div>
+        <div class="rr-card-meta">${rr.tasks.length} task${rr.tasks.length!==1?'s':''}</div>
+      </div>
+      <button class="rr-apply-btn" onclick="applyReadyRoutine('${rr.id}')">Apply</button>
+      <button onclick="deleteReadyRoutine('${rr.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;font-size:16px;flex-shrink:0">✕</button>
+    </div>
+  `).join('');
+}
+
+function promptSaveReadyRoutine(){
+  if(!routines.length){ showToast('No routines to save'); return; }
+  document.getElementById('rr-name-input').value = '';
+  document.getElementById('rr-name-prompt').style.display = 'flex';
+  setTimeout(()=>document.getElementById('rr-name-input').focus(), 100);
+}
+
+function cancelSaveRR(){
+  document.getElementById('rr-name-prompt').style.display = 'none';
+}
+
+function confirmSaveRR(){
+  const name = document.getElementById('rr-name-input').value.trim();
+  if(!name){ showToast('Enter a name'); return; }
+  const taskSig = routines.map(r=>r.title+'|'+r.dur).sort().join(',');
+  const dupByTask = readyRoutines.find(rr=>{
+    const sig = rr.tasks.map(t=>t.title+'|'+t.dur).sort().join(',');
+    return sig === taskSig;
+  });
+  if(dupByTask){
+    showToast('Already exists: '+dupByTask.name);
+    document.getElementById('rr-name-prompt').style.display = 'none';
+    return;
+  }
+  const dupByName = readyRoutines.find(rr=>rr.name.toLowerCase()===name.toLowerCase());
+  if(dupByName){
+    showToast('Name already used: '+dupByName.name);
+    return;
+  }
+  readyRoutines.push({
+    id: uid(),
+    name,
+    tasks: routines.map(r=>({
+      title: r.title, time: r.time, dur: r.dur,
+      repeatType: r.repeatType, days: r.days||[], dates: r.dates||[]
+    }))
+  });
+  document.getElementById('rr-name-prompt').style.display = 'none';
+  renderRRList();
+  driveSaveData();
+  showToast('Ready Routine saved: '+name);
+}
+
+function applyReadyRoutine(id){
+  const rr = readyRoutines.find(x=>x.id===id);
+  if(!rr) return;
+  let added = 0;
+  rr.tasks.forEach(t=>{
+    const exists = routines.find(r=>r.title===t.title && r.dur===t.dur);
+    if(!exists){ routines.push({...t, id:uid()}); added++; }
+  });
+  if(added===0){ showToast('All tasks already in routines'); return; }
+  closeRROverlay();
+  renderRoutine();
+  renderEvents();
+  driveSaveData();
+  showToast(added+' routine task'+(added!==1?'s':'')+' added from '+rr.name);
+}
+
+function deleteReadyRoutine(id){
+  readyRoutines = readyRoutines.filter(x=>x.id!==id);
+  renderRRList();
+  driveSaveData();
+}
+
+// ══ 5am Reset ══
+function checkDailyReset(){
+  const now = new Date();
+  const todayReset = (() => {
+    const d = new Date(now);
+    if(d.getHours() < 5) d.setDate(d.getDate() - 1);
+    return toDS(d);
+  })();
+  if(todayReset === lastResetDate) return;
+  const prevDate = lastResetDate;
+  if(prevDate){
+    schedules.forEach(s => {
+      const key = s.id + '_' + prevDate;
+      if(doneSchedules[key] === true){
+        archiveItem({ id:s.id, title:s.title, date:prevDate, time:s.time, dur:s.dur, notes:s.notes||'', _type:'schedule', status:'done' });
+      }
+    });
+    routines.forEach(r => {
+      const key = r.id + '_' + prevDate;
+      if(!completions[key] && routineAppliesOn(r, prevDate)){
+        completions[key] = 'missed';
+      }
+    });
+    schedules.forEach(s => {
+      const key = s.id + '_' + prevDate;
+      if(s.date === prevDate && !doneSchedules[key]){
+        doneSchedules[key] = 'missed';
+        archiveItem({ id:s.id, title:s.title, date:prevDate, time:s.time, dur:s.dur, notes:s.notes||'', _type:'schedule', status:'missed' });
+      }
+    });
+  }
+  lastResetDate = todayReset;
+  // Prune doneSchedules older than 30 days
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffStr = toDS(cutoff);
+  Object.keys(doneSchedules).forEach(key => {
+    const parts = key.split('_');
+    const dateStr = parts[parts.length - 1];
+    if(dateStr && dateStr < cutoffStr) delete doneSchedules[key];
+  });
+  Object.keys(completions).forEach(key => {
+    const parts = key.split('_');
+    const dateStr = parts[parts.length - 1];
+    if(dateStr && dateStr < cutoffStr) delete completions[key];
+  });
+  const archiveCutoff = new Date();
+  archiveCutoff.setDate(archiveCutoff.getDate() - 90);
+  const archiveCutoffStr = toDS(archiveCutoff);
+  if(window.calendarArchive){
+    window.calendarArchive = window.calendarArchive.filter(x => x.date >= archiveCutoffStr);
+  }
+  driveSaveData();
+}
+
+function archiveItem(item){
+  if(!window.calendarArchive) window.calendarArchive = [];
+  const exists = window.calendarArchive.find(x => x.id === item.id && x.date === item.date);
+  if(!exists) window.calendarArchive.push(item);
+}
+
+function markScheduleDone(id){
+  const s = schedules.find(x=>x.id===id);
+  if(!s) return;
+  const key = id + '_' + s.date;
+  doneSchedules[key] = true;
+  renderSchedule();
+  driveSaveData();
+}
+
+function toggleSchFilter(){
+  schFilterScheduleOnly = !schFilterScheduleOnly;
+  const btn = document.getElementById('sch-filter-btn');
+  if(btn){
+    btn.textContent = schFilterScheduleOnly ? 'Schedule only' : 'All';
+    btn.style.color = schFilterScheduleOnly ? 'var(--lime)' : 'var(--text-sec)';
+    btn.style.borderColor = schFilterScheduleOnly ? 'var(--lime)' : 'var(--border)';
+  }
+  renderSchedule();
+}
+
+function toggleRoutineFromSch(id, ds){
+  const key = id+'_'+ds;
+  completions[key] = !completions[key];
+  driveSaveData();
+  renderSchedule();
+  renderRoutine();
 }
 
 async function toggleRoutine(id,ds){
@@ -1683,10 +2190,12 @@ async function toggleRoutine(id,ds){
   renderEvents();
 }
 
+function toggleRoutineCheck(id, ds){
+  toggleRoutine(id, ds);
+}
+
 function openRoutineDetail(id){
-  const r=routines.find(x=>x.id===id);
-  if(!r)return;
-  showToast(r.title+' · '+fmtTime(r.time)+' · '+r.dur+'min');
+  openRoutineSheet(id);
 }
 
 // ══════════════════════════════════════
@@ -1702,15 +2211,24 @@ function selectRtType(t){
 
 function toggleDay(btn){btn.classList.toggle('on');}
 
-function openRoutineSheet(){
-  document.getElementById('rt-title').value='';
-  document.getElementById('rt-time').value='07:00';
-  document.getElementById('rt-dur').value='30';
+function openRoutineSheet(id=null){
+  editingRt = id;
+  const r = id ? routines.find(x=>x.id===id) : null;
+  document.getElementById('rt-sheet-title').textContent = id ? 'Edit Routine' : 'New Routine';
+  document.getElementById('rt-title').value = r ? r.title : '';
+  document.getElementById('rt-time').value  = r ? r.time  : '07:00';
+  document.getElementById('rt-dur').value   = r ? r.dur   : '30';
   document.querySelectorAll('#rt-days-row .day-btn').forEach(b=>b.classList.remove('on'));
-  document.getElementById('rt-month-dates').value='';
-  selectRtType('day');
+  if(r && r.repeatType === 'day' && r.days){
+    r.days.forEach(d=>{
+      const btn = document.querySelector(`#rt-days-row .day-btn[data-d="${d}"]`);
+      if(btn) btn.classList.add('on');
+    });
+  }
+  document.getElementById('rt-month-dates').value = r && r.repeatType==='date' ? (r.dates||[]).join(',') : '';
+  selectRtType(r ? r.repeatType : 'day');
+  document.getElementById('rt-delete-btn').style.display = id ? 'block' : 'none';
   document.getElementById('routine-overlay').classList.add('open');
-  // focus removed - unreliable on mobile
 }
 
 async function saveRoutine(){
@@ -1726,13 +2244,27 @@ async function saveRoutine(){
     dates=document.getElementById('rt-month-dates').value.split(',').map(x=>+x.trim()).filter(x=>x>=1&&x<=31);
     if(!dates.length){showToast('Enter valid dates (1–31)');return;}
   }
-  const r={id:uid(),title,time,dur,repeatType:rtType,days,dates};
-  routines.push(r);
+  const obj={id:editingRt||uid(),title,time,dur,repeatType:rtType,days,dates};
+  if(editingRt){
+    routines=routines.map(r=>r.id===editingRt?obj:r);
+    showToast('Routine updated');
+  } else {
+    routines.push(obj);
+    showToast('Routine saved');
+  }
   document.getElementById('routine-overlay').classList.remove('open');
   renderRoutine();renderSchStrip();renderCalView();
-  showToast('Routine saved');
   renderEvents();
   driveSaveData();
+}
+
+async function deleteRoutine(){
+  if(!editingRt)return;
+  routines=routines.filter(r=>r.id!==editingRt);
+  await driveSaveData();
+  document.getElementById('routine-overlay').classList.remove('open');
+  renderRoutine();renderSchStrip();renderCalView();renderEvents();
+  showToast('Routine deleted');
 }
 
 // ══════════════════════════════════════
@@ -1820,7 +2352,7 @@ function renderMonthView(){
     const count=getSchedulesOnDate(ds).length;
     const isToday=ds===todayStr();
     const isSel=ds===calSelDate;
-    html+=`<div class="mg-cell${isToday?' today':''}${isSel?' sel':''}" onclick="selectCalDate('${ds}')">
+    html+=`<div class="mg-cell${isToday?' today':''}${isSel?' sel':''}" onclick="calDayTap('${ds}')">
       <div class="mg-num">${day}</div>
       ${count?`<div class="mg-count">${count}</div>`:''}
     </div>`;
@@ -1894,6 +2426,10 @@ function reconnectGoogle(){
         routines    = data.routines    || [];
         completions = data.completions || {};
         deletionLog = data.deletionLog || [];
+        doneSchedules = data.doneSchedules || {};
+        lastResetDate = data.lastResetDate || '';
+        window.calendarArchive = data.calendarArchive || [];
+        readyRoutines = data.readyRoutines || [];
       }
       renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView();
     }
@@ -1910,6 +2446,7 @@ document.getElementById('rt-title').addEventListener('keydown',e=>{if(e.key==='E
 // NOTE DETAIL VIEW
 // ══════════════════════════════════════
 let ndEventId = null;
+let ndItemSource = 'event'; // 'event' | 'schedule' | 'routine'
 
 const ndIcons = {
   past:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 12l2 2 4-4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
@@ -1917,17 +2454,28 @@ const ndIcons = {
   future:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`
 };
 
-function openNoteDetail(id){
-  const e = events.find(x => x.id === id);
+function openNoteDetail(id, source='event'){
+  ndItemSource = source;
+  const e = source==='schedule' ? schedules.find(x=>x.id===id)
+           : source==='routine' ? routines.find(x=>x.id===id)
+           : events.find(x=>x.id===id);
   if(!e) return;
   ndEventId = id;
-  document.getElementById('nd-icon').innerHTML = ndIcons[e.state] || ndIcons.future;
+  const iconMap = {
+    schedule:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>`,
+    routine:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>`
+  };
+  document.getElementById('nd-icon').innerHTML = source==='event'
+    ? (ndIcons[e.state] || ndIcons.future)
+    : iconMap[source];
   document.getElementById('nd-title-lbl').textContent = e.title || 'Add Note';
-  document.getElementById('nd-note-title').textContent = e.title || '';
+  const titleEl = document.getElementById('nd-note-title');
+  titleEl.textContent = e.title || '';
+  titleEl.contentEditable = source==='event' ? 'true' : 'false';
+  titleEl.style.opacity = source==='event' ? '' : '0.7';
   document.getElementById('nd-note-body').innerHTML = e.body || '';
  setTimeout(()=>ndBindTodos(), 0);
-  // attach auto-save listeners (remove old ones first)
-  const titleEl = document.getElementById('nd-note-title');
+  // attach auto-save listeners
   const bodyEl  = document.getElementById('nd-note-body');
   titleEl.oninput = () => ndAutoSave();
   bodyEl.oninput  = () => ndAutoSave();
@@ -1966,14 +2514,20 @@ function openNoteDetail(id){
   document.getElementById('nd-tags').innerHTML = tags.length
     ? tags.map(t=>`<span class="nd-tag">#${esc(t.replace(/^#/,''))}</span>`).join('')
     : '';
-  const timeState = calcTimeState(e.date);
+  const timeState = source==='event' ? calcTimeState(e.date) : getEventState(e.date,e.time,e.dur);
   const openState = e.openState || 'open';
   let metaHtml = '';
   if(timeState){
     const timeLbls = {past:'Past',present:'Present',future:'Future'};
     metaHtml += `<span class="nd-state-badge ${timeState}">${timeLbls[timeState]}</span>`;
   }
-  metaHtml += `<span class="nd-state-badge" onclick="toggleOpenState()" style="cursor:pointer;background:${openState==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${openState==='closed'?'var(--red)':'var(--green)'};font-weight:800">${openState==='closed'?'Closed':'Open'}</span>`;
+  if(source==='event'){
+    metaHtml += `<span class="nd-state-badge" onclick="toggleOpenState()" style="cursor:pointer;background:${openState==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${openState==='closed'?'var(--red)':'var(--green)'};font-weight:800">${openState==='closed'?'Closed':'Open'}</span>`;
+  } else {
+    const srcBg = source==='routine' ? 'rgba(200,232,50,.12)' : 'var(--bg-input)';
+    const srcColor = source==='routine' ? 'var(--lime)' : 'var(--text-sec)';
+    metaHtml += `<span class="nd-state-badge" style="background:${srcBg};color:${srcColor}">${source.toUpperCase()}</span>`;
+  }
   if(e.date){
     metaHtml += `<span class="nd-meta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${friendlyDate(e.date)}</span>`;
   }
@@ -1982,48 +2536,55 @@ function openNoteDetail(id){
   }
   document.getElementById('nd-meta-row').innerHTML = metaHtml;
   document.getElementById('nd-dropdown').classList.remove('open');
-  document.getElementById('nd-remove-cover-btn').style.display =
-    (e && e.hasCover) ? 'block' : 'none';
-// restore cover — load from Drive asynchronously
-  ndShowCover(null); // clear any previous cover immediately
-  const evWithCover = events.find(x => x.id === id);
-  if(evWithCover && evWithCover.hasCover){
+  // Cover — events only
+  const coverEl = document.getElementById('nd-cover');
+  if(coverEl) coverEl.style.display = source==='event' ? '' : 'none';
+  document.getElementById('nd-remove-cover-btn').style.display = (source==='event' && e.hasCover) ? 'block' : 'none';
+  ndShowCover(null);
+  if(source==='event' && e.hasCover){
     driveLoadCover(id).then(dataUrl => {
       if(dataUrl && ndEventId === id) ndShowCover(dataUrl);
     });
   }
-  function fmtDateTime(iso){
-    if(!iso) return 'Unknown';
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
-      + ' at ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  }
-  document.getElementById('nd-created-lbl').textContent = 'Created: ' + fmtDateTime(e.createdAt);
-  document.getElementById('nd-updated-lbl').textContent = 'Last edited: ' + fmtDateTime(e.updatedAt);
-  const os = e.openState || 'open';
-  document.getElementById('nd-status-lbl').textContent = os === 'closed' ? 'CLOSED' : 'OPEN';
-  document.getElementById('nd-status-lbl').style.color = os === 'closed' ? 'var(--red)' : 'var(--green)';
-  // Render version history
+  // Info bar + version history — events only
+  const infoBar = document.getElementById('nd-info-bar');
+  if(infoBar) infoBar.style.display = source==='event' ? '' : 'none';
   const histEl = document.getElementById('nd-history');
-  const versions = e.versions || [];
-  if(!versions.length){
-    histEl.innerHTML = `<div style="font-size:11px;color:var(--text-dim);padding:8px 0">No history yet.</div>`;
+  if(source==='event'){
+    function fmtDateTime(iso){
+      if(!iso) return 'Unknown';
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
+        + ' at ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    }
+    document.getElementById('nd-created-lbl').textContent = 'Created: ' + fmtDateTime(e.createdAt);
+    document.getElementById('nd-updated-lbl').textContent = 'Last edited: ' + fmtDateTime(e.updatedAt);
+    const os = e.openState || 'open';
+    document.getElementById('nd-status-lbl').textContent = os === 'closed' ? 'CLOSED' : 'OPEN';
+    document.getElementById('nd-status-lbl').style.color = os === 'closed' ? 'var(--red)' : 'var(--green)';
+    // Render version history
+    const versions = e.versions || [];
+    if(!versions.length){
+      histEl.innerHTML = `<div style="font-size:11px;color:var(--text-dim);padding:8px 0">No history yet.</div>`;
+    } else {
+      const sorted = [...versions].reverse();
+      histEl.innerHTML = `
+        <div style="font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">History</div>
+        ${sorted.map((v,i)=>{
+          const d = new Date(v.ts);
+          const ts = d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
+            + ' at ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+          const vIdx = versions.length - 1 - i;
+          return `<div class="nd-hist-entry">
+            <span class="nd-hist-label ${v.label}">${v.label}</span>
+            <span class="nd-hist-ts">${ts}</span>
+            <button class="nd-hist-view" onclick="openVersionViewer(${vIdx},'${id}')">View</button>
+          </div>`;
+        }).join('')}
+      `;
+    }
   } else {
-    const sorted = [...versions].reverse();
-    histEl.innerHTML = `
-      <div style="font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px">History</div>
-      ${sorted.map((v,i)=>{
-        const d = new Date(v.ts);
-        const ts = d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
-          + ' at ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-        const vIdx = versions.length - 1 - i;
-        return `<div class="nd-hist-entry">
-          <span class="nd-hist-label ${v.label}">${v.label}</span>
-          <span class="nd-hist-ts">${ts}</span>
-          <button class="nd-hist-view" onclick="openVersionViewer(${vIdx},'${id}')">View</button>
-        </div>`;
-      }).join('')}
-    `;
+    histEl.innerHTML = '';
   }
   document.getElementById('note-detail').classList.add('open');
 }
@@ -2032,6 +2593,7 @@ function closeNoteDetail(){
   document.getElementById('note-detail').classList.remove('open');
   document.getElementById('nd-dropdown').classList.remove('open');
   ndEventId = null;
+  ndItemSource = 'event';
 }
 
 function openVersionViewer(versionIndex, eventId){
@@ -2047,6 +2609,51 @@ function openVersionViewer(versionIndex, eventId){
   document.getElementById('vv-title').textContent = v.title || '(no title)';
   document.getElementById('vv-body').innerHTML = v.body || '<span style="color:var(--text-dim)">(no content)</span>';
   document.getElementById('version-viewer').style.display = 'flex';
+}
+
+function openCalArchive(dateStr){
+  const archive = (window.calendarArchive||[]).filter(x=>x.date===dateStr);
+  const overlay = document.getElementById('cal-archive-overlay');
+  const listEl  = document.getElementById('cal-archive-list');
+  const dateEl  = document.getElementById('cal-archive-date');
+  dateEl.textContent = friendlyDate(dateStr);
+  if(!archive.length){
+    listEl.innerHTML = `<div style="padding:40px 0;text-align:center;color:var(--text-dim);font-size:14px">Nothing recorded for this day.</div>`;
+  } else {
+    listEl.innerHTML = archive.map(item=>{
+      const isDone   = item.status === 'done';
+      const badgeColor = isDone ? 'var(--lime)' : '#f87171';
+      const badgeBg    = isDone ? 'rgba(200,232,50,.12)' : 'rgba(248,113,113,.12)';
+      const badgeLbl   = isDone ? 'Done' : 'Missed';
+      const typeLbl    = item._type === 'routine' ? 'ROUTINE' : 'SCHEDULE';
+      return `<div style="display:flex;align-items:flex-start;gap:12px;padding:14px 0;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+            <span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;background:var(--bg-input);color:var(--text-dim);letter-spacing:.05em">${typeLbl}</span>
+            <span style="font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;background:${badgeBg};color:${badgeColor}">${badgeLbl}</span>
+          </div>
+          <div style="font-size:15px;font-weight:700;color:var(--text-pri)">${esc(item.title)}</div>
+          ${item.time?`<div style="font-size:11px;color:var(--text-dim);margin-top:2px">${tlFmtTime(item.time)} · ${tlFmtDur(item.dur||0)}</div>`:''}
+          ${item.notes?`<div style="font-size:12px;color:var(--text-sec);margin-top:4px">${esc(item.notes)}</div>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+  overlay.style.display = 'flex';
+}
+
+function closeCalArchive(){
+  document.getElementById('cal-archive-overlay').style.display = 'none';
+}
+
+function calDayTap(ds){
+  const today = todayStr();
+  if(ds < today){
+    openCalArchive(ds);
+  } else {
+    calSelDate = ds;
+    renderCalView();
+  }
 }
 
 function closeVersionViewer(){
@@ -2225,6 +2832,18 @@ async function ndAutoSave(){
   const bodyEl  = document.getElementById('nd-note-body');
   const newTitle = titleEl.textContent.trim();
   const newBody  = bodyEl.innerHTML;
+  if(ndItemSource === 'schedule'){
+    schedules = schedules.map(s => s.id !== ndEventId ? s : Object.assign({}, s, {body: newBody}));
+    clearTimeout(ndAutoSaveTimer);
+    ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
+    return;
+  }
+  if(ndItemSource === 'routine'){
+    routines = routines.map(r => r.id !== ndEventId ? r : Object.assign({}, r, {body: newBody}));
+    clearTimeout(ndAutoSaveTimer);
+    ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
+    return;
+  }
   events = events.map(e => {
     if(e.id !== ndEventId) return e;
     const oldLen = (e.body||'').replace(/<[^>]*>/g,'').length;
@@ -2560,6 +3179,8 @@ if('serviceWorker' in navigator){
   });
 }
 
+// v02e — Routine edit sheet: pencil icon on routine cards opens sheet pre-filled; full edit + delete; openRoutineDetail routes to sheet
+// v02f — Templates button added to routine tab; schedule/routine cards on Events tab open note detail modal; ndAutoSave saves body to correct array; event-only UI (cover, info bar, history) hidden for non-events
 </script>
 </body>
 </html>
