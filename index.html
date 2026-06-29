@@ -526,7 +526,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
       </div>
     </div>
   </div>
-  <div style="flex:1;overflow:hidden;display:flex;flex-direction:column" id="events-scroll">
+  <div style="flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch;scrollbar-width:none" id="events-scroll">
     <!-- Action List -->
     <div style="padding:0 20px 6px">
       <div style="font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Action List <span id="action-count" style="font-weight:400;opacity:.6"></span></div>
@@ -1278,7 +1278,7 @@ function renderEvents(){
   const schItems = schedules.map(s=>({
     ...s, _source:'schedule',
     _timeState: calcTimeState(s.date),
-    openState:'open', body: s.notes||'', tag:''
+    openState:'open', body: s.body||s.notes||'', tag:''
   }));
 
   const rtItems = routines
@@ -1399,7 +1399,7 @@ function renderEvents(){
     const db=b.updatedAt||b.createdAt||'';
     return db>da?1:-1;
   });
-  const allSch = schItems.filter(s=>(s.body||'').trim().length>0);
+  const allSch = schItems.filter(s=>(s.body||s.notes||'').trim().length>0);
   const allRt  = routines
     .filter(r=>(r.body||'').trim().length>0)
     .map(r=>({...r, _source:'routine', _timeState:'future', openState:'open'}));
@@ -2478,7 +2478,7 @@ function openNoteDetail(id, source='event'){
   titleEl.textContent = e.title || '';
   titleEl.contentEditable = source==='event' ? 'true' : 'false';
   titleEl.style.opacity = source==='event' ? '' : '0.7';
-  document.getElementById('nd-note-body').innerHTML = e.body || '';
+  document.getElementById('nd-note-body').innerHTML = e.body || e.notes || '';
  setTimeout(()=>ndBindTodos(), 0);
   // attach auto-save listeners
   const bodyEl  = document.getElementById('nd-note-body');
