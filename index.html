@@ -213,12 +213,12 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .nd-heading-sep-date{font-size:10px;color:var(--text-dim);margin-top:2px}
   
 /* ── Event Horizontal Cards ── */
-.ev-scroll{overflow-x:auto;overflow-y:hidden;display:flex;gap:14px;padding:4px 20px 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.ev-scroll{overflow-x:auto;overflow-y:hidden;display:flex;gap:14px;padding:4px 20px 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-y pan-x;overscroll-behavior-x:contain}
 .ev-scroll::-webkit-scrollbar{display:none}
 @media(min-width:600px){.ev-scroll{overflow-x:visible;overflow-y:visible;flex-wrap:wrap;gap:16px}.ev-hcard{min-width:0;max-width:none;flex:1 1 calc(50% - 8px)}}
 @media(min-width:900px){.ev-hcard{flex:1 1 calc(33% - 11px)}}
 /* ══ Events Tab Two-List Layout ══ */
-.ev-section-title{font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;padding:20px 20px 10px}
+.ev-section-title{font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;padding:20px 20px 10px;clear:both;position:relative}
 .ev-all-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 100px}
 @media(min-width:900px){.ev-all-grid{grid-template-columns:1fr 1fr 1fr}}
 .ev-all-grid .ev-hcard{min-width:0;max-width:none;width:100%;padding:16px;min-height:170px}
@@ -228,6 +228,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .ev-all-grid .ev-hcard .ev-title{font-size:16px;margin-bottom:8px}
 .ev-all-grid .ev-hcard .ev-icon{width:32px;height:32px;margin-bottom:10px}
 .ev-all-grid .ev-hcard .ev-body{-webkit-line-clamp:3}
+.ev-all-grid .ev-hcard .ev-action{display:none}
 .ev-all-badge{font-size:8px;font-weight:800;padding:2px 6px;border-radius:20px;letter-spacing:.05em;display:inline-block;margin-bottom:2px}
 .ev-hcard{min-width:255px;max-width:290px;border-radius:22px;padding:20px;flex-shrink:0;cursor:pointer;transition:transform .15s;display:flex;flex-direction:column;min-height:110px;position:relative;overflow:hidden}
 .ev-hcard:active{transform:scale(.97)}
@@ -575,7 +576,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
       </div>
     </div>
   </div>
-  <div style="flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch;scrollbar-width:none" id="events-scroll">
+  <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:block;-webkit-overflow-scrolling:touch;scrollbar-width:none" id="events-scroll">
     <!-- Action List -->
     <div style="padding:0 20px 6px">
       <div style="font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Action List <span id="action-count" style="font-weight:400;opacity:.6"></span></div>
