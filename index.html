@@ -36,12 +36,13 @@
   --nav-h:64px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
+  --ease:cubic-bezier(.4,0,.2,1);
 }
 html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-serif;color:var(--text-pri);-webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased}
 #app{height:100dvh;display:none;flex-direction:column;position:relative;background:var(--bg)}
 
 /* ── Views ── */
-.view{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);opacity:0;pointer-events:none;transition:opacity .2s ease}
+.view{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);opacity:0;pointer-events:none;transition:opacity .25s var(--ease)}
 .view.active{opacity:1;pointer-events:all}
 
 /* ── Scroll ── */
@@ -125,7 +126,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .empty svg{width:40px;height:40px;opacity:.2;display:block;margin:0 auto 14px}
 
 /* ── Note Detail View ── */
-.note-detail{position:fixed;inset:0;height:100dvh;background:#1e1a14;z-index:150;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);pointer-events:none}
+.note-detail{position:fixed;inset:0;height:100dvh;background:#1e1a14;z-index:150;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .32s var(--ease);pointer-events:none}
 .note-detail.open{transform:translateY(0);pointer-events:all}
 .nd-topbar{padding:max(var(--safe-t),14px) 20px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .nd-back{width:36px;height:36px;border-radius:50%;background:var(--bg-card2);border:none;color:var(--text-pri);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -229,7 +230,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .ev-all-grid .ev-hcard .ev-body{-webkit-line-clamp:3}
 .ev-all-grid .ev-hcard .ev-action{display:none}
 .ev-all-badge{font-size:8px;font-weight:800;padding:2px 6px;border-radius:20px;letter-spacing:.05em;display:inline-block;margin-bottom:2px}
-.ev-hcard{min-width:255px;max-width:290px;border-radius:22px;padding:20px;flex-shrink:0;cursor:pointer;transition:transform .15s;display:flex;flex-direction:column;min-height:110px;position:relative;overflow:hidden}
+.ev-hcard{min-width:255px;max-width:290px;border-radius:22px;padding:20px;flex-shrink:0;cursor:pointer;transition:transform .15s var(--ease),opacity .3s var(--ease);display:flex;flex-direction:column;min-height:110px;position:relative;overflow:hidden}
 .ev-hcard:active{transform:scale(.97)}
 .ev-hcard.dark{background-color:#15130f;border:1px solid rgba(255,255,255,.08);color:var(--text-pri)}
 .ev-hcard.tinted{background-color:#1d2218;border:1px solid rgba(200,232,50,.18);color:var(--text-pri)}
@@ -382,9 +383,10 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 /* ════════════════════
    MODALS / SHEETS
 ════════════════════ */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;z-index:200;opacity:0;pointer-events:none;transition:opacity .22s}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;z-index:200;opacity:0;pointer-events:none;transition:opacity .25s var(--ease)}
 .overlay.open{opacity:1;pointer-events:all}
-.sheet{width:100%;background:var(--bg-card);border-radius:24px 24px 0 0;padding:20px 20px calc(24px + var(--safe-b));border-top:1px solid var(--border);max-height:92dvh;overflow-y:auto}
+.sheet{width:100%;background:var(--bg-card);border-radius:24px 24px 0 0;padding:20px 20px calc(24px + var(--safe-b));border-top:1px solid var(--border);max-height:92dvh;overflow-y:auto;transform:translateY(24px);transition:transform .25s var(--ease)}
+.overlay.open .sheet{transform:translateY(0)}
 .sheet-handle{width:40px;height:4px;background:var(--bg-input);border-radius:2px;margin:0 auto 20px}
 .sheet-title{font-size:17px;font-weight:800;color:var(--text-pri);margin-bottom:16px}
 .field-label{font-size:11px;font-weight:700;color:var(--text-sec);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;margin-top:14px}
@@ -485,7 +487,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 .nd-fmt-tb-btn{background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;color:var(--text-sec);cursor:pointer;font-size:12px;font-weight:700;padding:5px 9px;flex-shrink:0;font-family:inherit;line-height:1;transition:background .12s}
 .nd-fmt-tb-btn:active{background:var(--lime);color:#1a1410;border-color:var(--lime)}
 /* Toast */
-.toast{position:fixed;bottom:calc(var(--nav-h) + var(--safe-b) + 14px);left:50%;transform:translateX(-50%) translateY(12px);background:var(--lime);color:#1a1410;padding:10px 20px;border-radius:30px;font-size:13px;font-weight:800;opacity:0;transition:all .28s;white-space:nowrap;z-index:300;pointer-events:none;box-shadow:0 4px 20px var(--lime-glow)}
+.toast{position:fixed;bottom:calc(var(--nav-h) + var(--safe-b) + 14px);left:50%;transform:translateX(-50%) translateY(12px);background:var(--lime);color:#1a1410;padding:10px 20px;border-radius:30px;font-size:13px;font-weight:800;opacity:0;transition:all .25s var(--ease);white-space:nowrap;z-index:300;pointer-events:none;box-shadow:0 4px 20px var(--lime-glow)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* Login screen */
@@ -607,6 +609,9 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div class="empty" id="events-list-empty" style="display:none;margin:0 20px">No open events.</div>
     <!-- All List -->
     <div class="ev-section-title">All List</div>
+    <div style="padding:0 20px 12px">
+      <input class="inp" id="ev-all-search" placeholder="Search title, tags, description…" oninput="onAllSearchInput(this.value)">
+    </div>
     <div class="ev-all-grid" id="ev-all-grid"></div>
     <div id="deletion-log-section" style="padding:0 20px 20px"></div>
   </div>
@@ -762,6 +767,8 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <input class="inp" id="sc-dur" type="number" placeholder="e.g. 60" min="5" value="60">
     <div class="field-label">Notes</div>
     <textarea class="inp" id="sc-notes" placeholder="Optional notes…" rows="2"></textarea>
+    <div class="field-label">Tags</div>
+    <input class="inp" id="sc-tag" placeholder="#life #work #health…">
     <div id="sc-conflict-box"></div>
     <button class="sheet-btn" onclick="saveSchedule()">Save Schedule</button>
     <button class="sheet-btn danger" id="sc-delete-btn" onclick="deleteSchedule()" style="display:none">Delete Schedule</button>
@@ -779,6 +786,8 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <input class="inp" id="rt-time" type="time" value="07:00">
     <div class="field-label">Duration (minutes)</div>
     <input class="inp" id="rt-dur" type="number" value="30" min="5">
+    <div class="field-label">Tags</div>
+    <input class="inp" id="rt-tag" placeholder="#life #work #health…">
     <div class="field-label">Repeat type</div>
     <div style="display:flex;gap:8px;margin-bottom:4px">
       <button class="state-btn" id="rt-type-day" onclick="selectRtType('day')" style="flex:1">Weekdays</button>
@@ -1309,6 +1318,7 @@ let schScrollTimer       = null;
 let rtScrollTimer        = null;
 let curView   = 'events';
 let eTab      = 'all';
+let allSearchQuery = '';
 let editingEv = null;
 let editingSc = null;
 let reschedulingSc = null; // {id, oldDate} when rescheduling a missed schedule
@@ -1477,6 +1487,11 @@ function switchETab(t){
   renderEvents();
 }
 
+function onAllSearchInput(v){
+  allSearchQuery = v.trim().toLowerCase();
+  renderEvents();
+}
+
 function renderEvents(){
   const today = todayStr();
 
@@ -1486,7 +1501,8 @@ function renderEvents(){
   const schItems = schedules.map(s=>({
     ...s, _source:'schedule',
     _timeState: calcTimeState(s.date),
-    openState:'open', body: s.body||s.notes||'', tag:''
+    _occState: getEventState(s.date, s.time, s.dur),
+    openState:'open', body: s.body||s.notes||'', tag: s.tag||''
   }));
 
   const rtItems = routines
@@ -1495,7 +1511,8 @@ function renderEvents(){
       ...r, _source:'routine',
       date: today,
       _timeState: getEventState(today,r.time,r.dur),
-      openState:'open', body: r.description||'', tag:''
+      _occState: getEventState(today,r.time,r.dur),
+      openState:'open', body: r.description||'', tag: r.tag||''
     }));
 
   // ── ACTION LIST: open events + upcoming sch/rt, merged into one true time-sorted list ──
@@ -1522,7 +1539,7 @@ function renderEvents(){
     : [...upcomingSchRt]
         .sort((a,b)=>{
           const ord = {present:0, future:1};
-          const ta = ord[a._timeState] ?? 2, tb = ord[b._timeState] ?? 2;
+          const ta = ord[a._occState] ?? 2, tb = ord[b._occState] ?? 2;
           if(ta !== tb) return ta - tb;
           // Within same state, sort by date then time ascending
           const da = a.date || '9999', db = b.date || '9999';
@@ -1611,22 +1628,12 @@ function renderEvents(){
           if(!e.coverCardCrop && !coverCache['card_'+e.id]){
             const cardEl = document.getElementById(`${idPrefix}${e.id}`);
             if(cardEl){
+              cardEl.style.opacity = '0';
               cardEl.classList.add('has-cover');
               cardEl.style.backgroundImage = `url('${dataUrl}')`;
               cardEl.style.backgroundPosition = `center ${e.coverCardPosition != null ? e.coverCardPosition : 50}%`;
+              requestAnimationFrame(()=>{ cardEl.style.opacity = '1'; });
             }
-          }
-        });
-      }
-      if(e.coverCardCrop && !coverCache['card_'+e.id]){
-        driveLoadNamedFile('card_cover_'+e.id+'.jpg').then(dataUrl=>{
-          if(!dataUrl) return;
-          coverCache['card_'+e.id] = dataUrl;
-          const cardEl = document.getElementById(`${idPrefix}${e.id}`);
-          if(cardEl){
-            cardEl.classList.add('has-cover');
-            cardEl.style.backgroundImage = `url('${dataUrl}')`;
-            cardEl.style.backgroundPosition = 'center 50%';
           }
         });
       }
@@ -1673,8 +1680,16 @@ function renderEvents(){
   const allSch = schItems.filter(s=>(s.body||s.notes||'').trim().length>0);
   const allRt  = routines
     .filter(r=>(r.body||'').trim().length>0)
-    .map(r=>({...r, _source:'routine', _timeState:'future', openState:'open', body:r.description||r.body||'', tag:''}));
-  const allItems = [...allEvs, ...allSch, ...allRt];
+    .map(r=>({...r, _source:'routine', _timeState:'future', openState:'open', body:r.description||r.body||'', tag:r.tag||''}));
+  let allItems = [...allEvs, ...allSch, ...allRt];
+  if(allSearchQuery){
+    allItems = allItems.filter(e=>{
+      const title = (e.title||'').toLowerCase();
+      const tag = (e.tag||'').toLowerCase();
+      const body = (e.body||e.notes||e.description||'').replace(/<[^>]*>/g,'').toLowerCase();
+      return title.includes(allSearchQuery) || tag.includes(allSearchQuery) || body.includes(allSearchQuery);
+    });
+  }
 
   const gridEl = document.getElementById('ev-all-grid');
   if(gridEl){
@@ -2107,6 +2122,7 @@ function openScheduleSheet(id=null, isReschedule=false){
   document.getElementById('sc-time').value=s?s.time:'09:00';
   document.getElementById('sc-dur').value=s?s.dur:60;
   document.getElementById('sc-notes').value=s?s.notes:'';
+  document.getElementById('sc-tag').value=s?(s.tag||''):'';
   document.getElementById('sc-conflict-box').innerHTML='';
   document.getElementById('sc-delete-btn').style.display=id?'block':'none';
   document.getElementById('sch-overlay').classList.add('open');
@@ -2144,7 +2160,8 @@ async function saveSchedule(){
     return;
   }
 
-  const obj={id:editingSc||uid(),title,date,time,dur,notes:document.getElementById('sc-notes').value.trim()};
+  const existingSc = editingSc ? schedules.find(s=>s.id===editingSc) : null;
+  const obj=Object.assign({}, existingSc, {id:editingSc||uid(),title,date,time,dur,notes:document.getElementById('sc-notes').value.trim(),tag:document.getElementById('sc-tag').value.trim()});
   if(editingSc){schedules=schedules.map(s=>s.id===editingSc?obj:s);}
   else schedules.push(obj);
   document.getElementById('sch-overlay').classList.remove('open');
@@ -2502,7 +2519,8 @@ function runAlertCheck(){
 
 function renderAlertBanner(){
   const el=document.getElementById('alert-banner');
-  if(!alertBannerItem){ el.classList.remove('show'); return; }
+  const noteOpen = document.getElementById('note-detail').classList.contains('open');
+  if(!alertBannerItem || noteOpen){ el.classList.remove('show'); return; }
   document.getElementById('ab-title').textContent=alertBannerItem.title;
   document.getElementById('ab-sub').textContent = alertBannerItem.state==='ongoing' ? 'Ongoing now' : 'Starting soon';
   el.classList.add('show');
@@ -2594,6 +2612,7 @@ function openRoutineSheet(id=null){
   document.getElementById('rt-title').value = r ? r.title : '';
   document.getElementById('rt-time').value  = r ? r.time  : '07:00';
   document.getElementById('rt-dur').value   = r ? r.dur   : '30';
+  document.getElementById('rt-tag').value   = r ? (r.tag||'') : '';
   document.querySelectorAll('#rt-days-row .day-btn').forEach(b=>b.classList.remove('on'));
   if(r && r.repeatType === 'day' && r.days){
     r.days.forEach(d=>{
@@ -2620,7 +2639,8 @@ async function saveRoutine(){
     dates=document.getElementById('rt-month-dates').value.split(',').map(x=>+x.trim()).filter(x=>x>=1&&x<=31);
     if(!dates.length){showToast('Enter valid dates (1–31)');return;}
   }
-  const obj={id:editingRt||uid(),title,time,dur,repeatType:rtType,days,dates};
+  const existingRt = editingRt ? routines.find(r=>r.id===editingRt) : null;
+  const obj=Object.assign({}, existingRt, {id:editingRt||uid(),title,time,dur,repeatType:rtType,days,dates,tag:document.getElementById('rt-tag').value.trim()});
   if(editingRt){
     routines=routines.map(r=>r.id===editingRt?obj:r);
     showToast('Routine updated');
@@ -2981,6 +3001,7 @@ function openNoteDetail(id, source='event'){
     histEl.innerHTML = '';
   }
   document.getElementById('note-detail').classList.add('open');
+  renderAlertBanner();
 }
 
 function closeNoteDetail(){
@@ -2990,6 +3011,7 @@ function closeNoteDetail(){
   document.getElementById('nd-dropdown').classList.remove('open');
   ndEventId = null;
   ndItemSource = 'event';
+  renderAlertBanner();
 }
 
 function openVersionViewer(versionIndex, eventId){
@@ -3445,8 +3467,7 @@ async function confirmCrop(){
         cardEl.style.backgroundImage = `url('${croppedDataUrl}')`;
         cardEl.style.backgroundPosition = 'center 50%';
       }
-      // Upload with a separate filename
-      await driveUploadNamedFile('card_cover_'+ndEventId+'.jpg', croppedDataUrl);
+      // Display-only crop — no separate Drive file. coverCardCrop is saved as part of the data JSON below.
       await driveSaveData();
       renderEvents();
       showToast('Card cover cropped ✓');
@@ -3479,7 +3500,7 @@ async function confirmCrop(){
       document.getElementById('nd-remove-cover-btn').style.display = 'block';
       document.getElementById('nd-cover-size-divider').style.display = 'block';
       document.getElementById('nd-cover-size-row').style.display = 'block';
-      await driveUploadCover(ndEventId, croppedDataUrl);
+      await driveUploadCover(ndEventId, _cropRawDataUrl);
       await driveSaveData();
       renderEvents();
       showToast('Cover cropped ✓');
@@ -3604,12 +3625,14 @@ async function ndAutoSave(){
   const newBody  = bodyEl.innerHTML;
   if(ndItemSource === 'schedule'){
     schedules = schedules.map(s => s.id !== ndEventId ? s : Object.assign({}, s, {body: newBody}));
+    renderEvents();
     clearTimeout(ndAutoSaveTimer);
     ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
     return;
   }
   if(ndItemSource === 'routine'){
     routines = routines.map(r => r.id !== ndEventId ? r : Object.assign({}, r, {body: newBody}));
+    renderEvents();
     clearTimeout(ndAutoSaveTimer);
     ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
     return;
