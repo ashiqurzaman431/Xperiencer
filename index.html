@@ -221,11 +221,13 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .ev-section-title{font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;padding:20px 20px 10px}
 .ev-all-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 100px}
 @media(min-width:900px){.ev-all-grid{grid-template-columns:1fr 1fr 1fr}}
-.ev-all-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:6px;min-height:120px;position:relative;overflow:hidden}
-.ev-all-card:active{transform:scale(.97)}
-.ev-all-card-title{font-size:13px;font-weight:700;color:var(--text-pri);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.ev-all-card-body{font-size:11px;color:var(--text-dim);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex:1}
-.ev-all-card-footer{font-size:10px;color:var(--text-dim);font-weight:600;margin-top:auto}
+.ev-all-grid .ev-hcard{min-width:0;max-width:none;width:100%;padding:16px;min-height:170px}
+.ev-all-grid .ev-hcard.cover-sm{min-height:170px}
+.ev-all-grid .ev-hcard.cover-md{min-height:200px}
+.ev-all-grid .ev-hcard.cover-lg{min-height:240px}
+.ev-all-grid .ev-hcard .ev-title{font-size:16px;margin-bottom:8px}
+.ev-all-grid .ev-hcard .ev-icon{width:32px;height:32px;margin-bottom:10px}
+.ev-all-grid .ev-hcard .ev-body{-webkit-line-clamp:3}
 .ev-all-badge{font-size:8px;font-weight:800;padding:2px 6px;border-radius:20px;letter-spacing:.05em;display:inline-block;margin-bottom:2px}
 .ev-hcard{min-width:255px;max-width:290px;border-radius:22px;padding:20px;flex-shrink:0;cursor:pointer;transition:transform .15s;display:flex;flex-direction:column;min-height:110px;position:relative;overflow:hidden}
 .ev-hcard:active{transform:scale(.97)}
@@ -1518,53 +1520,48 @@ function renderEvents(){
     future:`<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>`
   };
 
-  if(!actionItems.length){
-    el.innerHTML='';
-    if(emptyEl) emptyEl.style.display='flex';
-  } else {
-    if(emptyEl) emptyEl.style.display='none';
-    el.innerHTML = actionItems.map((e,i)=>{
-      const isSchRt = e._source==='schedule' || e._source==='routine';
-      const skin = e._source==='routine' ? 'routine' : (isSchRt ? 'tinted' : 'dark');
-      const tags=(e.tag||'').split(' ').filter(Boolean);
-      const timeLbl=e.date?(()=>{
-        const today = todayStr();
-        if(e.date === today) return 'Today'+(e.time?' at '+fmtTime(e.time):'');
-        // Compute day difference using date-only values (no time-of-day skew)
-        const d = dsToDate(e.date);
-        const t = dsToDate(today);
-        const diff = Math.round((d - t) / (1000*60*60*24));
-        if(diff===1) return 'Tomorrow'+(e.time?' at '+fmtTime(e.time):'');
-        if(diff===-1) return 'Yesterday';
-        return e.date+(e.time?' · '+fmtTime(e.time):'');
-      })():'';
-      const clickFn = e._source==='schedule'
-        ? `openNoteDetail('${e.id}','schedule')`
-        : e._source==='routine'
-          ? `openNoteDetail('${e.id}','routine')`
-          : `openNoteDetail('${e.id}')`;
-      const typeBadge = e._source==='schedule'
-        ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(200,232,50,.14);color:var(--lime);letter-spacing:.05em">SCHEDULE</span>`
-        : e._source==='routine'
-          ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(200,232,50,.14);color:var(--lime);letter-spacing:.05em">ROUTINE</span>`
-          : '';
-      const hasCover = !!e.hasCover;
-      const coverSizeClass = hasCover ? ` cover-${e.coverSize||'md'}` : '';
-      // Use card-specific crop if available, else fall back to note cover
-      const cardBgUrl = e.coverCardCrop
-        ? (coverCache['card_'+e.id] || e.coverCardCrop)
-        : (hasCover && coverCache[e.id] ? coverCache[e.id] : null);
-      const coverInlineStyle = cardBgUrl
-        ? ` style="background-image:url('${cardBgUrl}');background-position:center ${e.coverCardPosition != null ? e.coverCardPosition : 50}%"`
+  // Shared card markup builder, used by both Action List and All List so they render identically
+  function buildEventCardHTML(e, idPrefix){
+    const isSchRt = e._source==='schedule' || e._source==='routine';
+    const skin = e._source==='routine' ? 'routine' : (isSchRt ? 'tinted' : 'dark');
+    const tags=(e.tag||'').split(' ').filter(Boolean);
+    const timeLbl=e.date?(()=>{
+      const today = todayStr();
+      if(e.date === today) return 'Today'+(e.time?' at '+fmtTime(e.time):'');
+      const d = dsToDate(e.date);
+      const t = dsToDate(today);
+      const diff = Math.round((d - t) / (1000*60*60*24));
+      if(diff===1) return 'Tomorrow'+(e.time?' at '+fmtTime(e.time):'');
+      if(diff===-1) return 'Yesterday';
+      return e.date+(e.time?' · '+fmtTime(e.time):'');
+    })():'';
+    const clickFn = e._source==='schedule'
+      ? `openNoteDetail('${e.id}','schedule')`
+      : e._source==='routine'
+        ? `openNoteDetail('${e.id}','routine')`
+        : `openNoteDetail('${e.id}')`;
+    const typeBadge = e._source==='schedule'
+      ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(200,232,50,.14);color:var(--lime);letter-spacing:.05em">SCHEDULE</span>`
+      : e._source==='routine'
+        ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(200,232,50,.14);color:var(--lime);letter-spacing:.05em">ROUTINE</span>`
         : '';
-      const bodyText = e.body ? e.body.replace(/<[^>]*>/g,'').trim() : '';
-      return `<div class="ev-hcard ${skin}${hasCover?' has-cover':''}${coverSizeClass}" id="ev-hcard-${e.id}"${coverInlineStyle} onclick="${clickFn}">
-        <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[e._timeState]||actionIcons.future}</button>
-        <div class="ev-icon">${cardIcons[e._timeState]||cardIcons.future}</div>
+    const hasCover = !!e.hasCover;
+    const coverSizeClass = hasCover ? ` cover-${e.coverSize||'md'}` : '';
+    const cardBgUrl = e.coverCardCrop
+      ? (coverCache['card_'+e.id] || e.coverCardCrop)
+      : (hasCover && coverCache[e.id] ? coverCache[e.id] : null);
+    const coverInlineStyle = cardBgUrl
+      ? ` style="background-image:url('${cardBgUrl}');background-position:center ${e.coverCardPosition != null ? e.coverCardPosition : 50}%"`
+      : '';
+    const bodyText = e.body ? e.body.replace(/<[^>]*>/g,'').trim() : '';
+    const timeState = e._timeState;
+    return `<div class="ev-hcard ${skin}${hasCover?' has-cover':''}${coverSizeClass}" id="${idPrefix}${e.id}"${coverInlineStyle} onclick="${clickFn}">
+        <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[timeState]||actionIcons.future}</button>
+        <div class="ev-icon">${cardIcons[timeState]||cardIcons.future}</div>
         ${typeBadge}
-        <div class="ev-title">${esc(e.title)}</div>
+        <div class="ev-title">${esc(e.title||'Untitled')}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px">
-          ${e._timeState?`<span class="state-badge ${e._timeState}">${{past:'Past',present:'Present',future:'Future'}[e._timeState]}</span>`:''}
+          ${timeState?`<span class="state-badge ${timeState}">${{past:'Past',present:'Present',future:'Future'}[timeState]}</span>`:''}
           ${e._source==='event'?`<span class="state-badge" style="background:${(e.openState||'open')==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${(e.openState||'open')==='closed'?'var(--red)':'var(--lime)'};font-weight:800">${(e.openState||'open')==='closed'?'Closed':'Open'}</span>`:''}
         </div>
         ${tags.length?`<div class="ev-tags">${tags.map(t=>`<span class="ev-tag">${esc(t)}</span>`).join('')}</div>`:''}
@@ -1574,16 +1571,17 @@ function renderEvents(){
           <div class="ev-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
         </div>
       </div>`;
-    }).join('');
+  }
 
-    actionItems.forEach(e=>{
+  // Loads/attaches cover images for a list of rendered card items, given the id prefix used for their DOM nodes
+  function loadCardCovers(items, idPrefix){
+    items.forEach(e=>{
       if(e.hasCover && !coverCache[e.id]){
         driveLoadCover(e.id).then(dataUrl=>{
           if(!dataUrl) return;
           coverCache[e.id] = dataUrl;
-          // Only set card background from note cover if no card-specific crop exists
           if(!e.coverCardCrop && !coverCache['card_'+e.id]){
-            const cardEl = document.getElementById(`ev-hcard-${e.id}`);
+            const cardEl = document.getElementById(`${idPrefix}${e.id}`);
             if(cardEl){
               cardEl.classList.add('has-cover');
               cardEl.style.backgroundImage = `url('${dataUrl}')`;
@@ -1596,7 +1594,7 @@ function renderEvents(){
         driveLoadNamedFile('card_cover_'+e.id+'.jpg').then(dataUrl=>{
           if(!dataUrl) return;
           coverCache['card_'+e.id] = dataUrl;
-          const cardEl = document.getElementById(`ev-hcard-${e.id}`);
+          const cardEl = document.getElementById(`${idPrefix}${e.id}`);
           if(cardEl){
             cardEl.classList.add('has-cover');
             cardEl.style.backgroundImage = `url('${dataUrl}')`;
@@ -1607,7 +1605,16 @@ function renderEvents(){
     });
   }
 
-  // ── ALL LIST (2-column grid, newest first) ──
+  if(!actionItems.length){
+    el.innerHTML='';
+    if(emptyEl) emptyEl.style.display='flex';
+  } else {
+    if(emptyEl) emptyEl.style.display='none';
+    el.innerHTML = actionItems.map(e=>buildEventCardHTML(e,'ev-hcard-')).join('');
+    loadCardCovers(actionItems, 'ev-hcard-');
+  }
+
+  // ── ALL LIST (2-column grid, newest first, same card styling as Action List) ──
   const allEvs = [...evItems].sort((a,b)=>{
     const da=a.updatedAt||a.createdAt||'';
     const db=b.updatedAt||b.createdAt||'';
@@ -1616,7 +1623,7 @@ function renderEvents(){
   const allSch = schItems.filter(s=>(s.body||s.notes||'').trim().length>0);
   const allRt  = routines
     .filter(r=>(r.body||'').trim().length>0)
-    .map(r=>({...r, _source:'routine', _timeState:'future', openState:'open'}));
+    .map(r=>({...r, _source:'routine', _timeState:'future', openState:'open', body:r.description||r.body||'', tag:''}));
   const allItems = [...allEvs, ...allSch, ...allRt];
 
   const gridEl = document.getElementById('ev-all-grid');
@@ -1624,28 +1631,11 @@ function renderEvents(){
     if(!allItems.length){
       gridEl.innerHTML = `<div style="grid-column:1/-1;padding:40px 0;text-align:center;color:var(--text-dim);font-size:13px">Nothing here yet.</div>`;
     } else {
-      gridEl.innerHTML = allItems.map(e=>{
-        const clickFn = e._source==='schedule'
-          ? `openNoteDetail('${e.id}','schedule')`
-          : e._source==='routine'
-            ? `openNoteDetail('${e.id}','routine')`
-            : `openNoteDetail('${e.id}')`;
-        const typeBadge = e._source==='schedule'
-          ? `<span class="ev-all-badge" style="background:var(--bg-input);color:var(--text-dim)">SCHEDULE</span>`
-          : e._source==='routine'
-            ? `<span class="ev-all-badge" style="background:rgba(200,232,50,.12);color:var(--lime)">ROUTINE</span>`
-            : '';
-        const bodyText = (e.body||'').replace(/<[^>]*>/g,'').trim();
-        const timeLbl = e.date ? e.date+(e.time?' · '+fmtTime(e.time):'') : '';
-        return `<div class="ev-all-card" onclick="${clickFn}">
-          ${typeBadge}
-          <div class="ev-all-card-title">${esc(e.title||'Untitled')}</div>
-          ${bodyText?`<div class="ev-all-card-body">${esc(bodyText)}</div>`:''}
-          <div class="ev-all-card-footer">${timeLbl}</div>
-        </div>`;
-      }).join('');
+      gridEl.innerHTML = allItems.map(e=>buildEventCardHTML(e,'ev-all-hcard-')).join('');
+      loadCardCovers(allItems, 'ev-all-hcard-');
     }
   }
+
 
   // ── Deletion log ──
   const logEl = document.getElementById('deletion-log-section');
