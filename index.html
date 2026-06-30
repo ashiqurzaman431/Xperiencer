@@ -431,6 +431,13 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 .sch-card-done .sch-card-title{text-decoration:line-through}
 .sch-card-missed{opacity:.4;border-left:3px solid #f87171}
 .sch-card-missed .sch-card-title{color:#f87171}
+.sch-card-ongoing{border:2px solid var(--lime);box-shadow:0 0 0 3px rgba(200,232,50,.15)}
+.sch-resched-btn{background:none;border:1px solid #f87171;color:#f87171;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit}
+.sch-card-ongoing .sch-card-title{color:var(--lime)}
+#alert-banner{display:none;position:fixed;top:0;left:0;right:0;z-index:250;background:var(--lime);padding:12px 16px;align-items:center;justify-content:space-between;gap:10px;cursor:pointer}
+#alert-banner.show{display:flex}
+#alert-banner .ab-text{font-size:13px;font-weight:800;color:#1a1410}
+#alert-banner .ab-sub{font-size:11px;font-weight:600;color:#1a1410;opacity:.75}
 
 /* ══ Ready Routines ══ */
 .rr-overlay{position:fixed;inset:0;z-index:200;background:#1e1a14;display:none;flex-direction:column}
@@ -552,6 +559,13 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <button onclick="triggerInstall()" style="background:var(--lime);border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:800;color:#1a1410;cursor:pointer;font-family:inherit">Install</button>
     <button onclick="dismissInstall()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;color:var(--text-dim);cursor:pointer;font-family:inherit">✕</button>
   </div>
+</div>
+<div id="alert-banner" onclick="alertBannerTap()">
+  <div>
+    <div class="ab-text" id="ab-title"></div>
+    <div class="ab-sub" id="ab-sub"></div>
+  </div>
+  <div class="ab-sub">Tap to open</div>
 </div>
 
 <!-- ══ VIEW: EVENTS ══ -->
@@ -1061,6 +1075,8 @@ async function enterApp(){
   renderSchedule();
   renderRoutine();
   renderCalView();
+  runAlertCheck();
+  setInterval(runAlertCheck, 20000);
 }
 
 function loginAsGuest(){
@@ -1289,6 +1305,7 @@ let curView   = 'events';
 let eTab      = 'all';
 let editingEv = null;
 let editingSc = null;
+let reschedulingSc = null; // {id, oldDate} when rescheduling a missed schedule
 let editingRt = null;
 let evState   = 'open';
 let rtType    = 'day';
@@ -1840,6 +1857,7 @@ function renderSchedule(){
       notes: s.notes||'',
       done: doneSchedules[s.id+'_'+ds] === true,
       missed: doneSchedules[s.id+'_'+ds] === 'missed',
+      ongoing: computeOccState(s.time, s.dur, ds, doneSchedules[s.id+'_'+ds]) === 'ongoing',
       _type:'schedule'
     }));
   const todayRoutines = routines
@@ -1886,7 +1904,7 @@ function renderSchedule(){
     }
     const endT = tlEndTime(row.time, row.dur);
     const isRoutine = row._type === 'routine';
-    const doneClass = row.done ? 'sch-card-done' : row.missed ? 'sch-card-missed' : '';
+    const doneClass = row.done ? 'sch-card-done' : row.missed ? 'sch-card-missed' : row.ongoing ? 'sch-card-ongoing' : '';
     const doneCheck = row.done
       ? `<div class="sch-done-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>`
       : '';
@@ -1911,8 +1929,9 @@ function renderSchedule(){
           </div>
           ${row.notes?`<div class="sch-card-notes">${esc(row.notes)}</div>`:''}
           <div style="display:flex;gap:8px;margin-top:6px">
-            ${!row.done && !isRoutine?`<button class="sch-done-btn" onclick="event.stopPropagation();markScheduleDone('${row.id}')">✓ Done</button>`:''}
-            ${!row.done && isRoutine?`<button class="sch-done-btn" onclick="event.stopPropagation();toggleRoutineFromSch('${row.id}','${ds}')">✓ Done</button>`:''}
+            ${row.ongoing && !isRoutine?`<button class="sch-done-btn" onclick="event.stopPropagation();markScheduleDone('${row.id}')">✓ Close</button>`:''}
+            ${row.ongoing && isRoutine?`<button class="sch-done-btn" onclick="event.stopPropagation();toggleRoutineFromSch('${row.id}','${ds}')">✓ Close</button>`:''}
+            ${row.missed && !isRoutine?`<button class="sch-resched-btn" onclick="event.stopPropagation();startReschedule('${row.id}','${ds}')">↻ Reschedule</button>`:''}
           </div>
         </div>
       </div>
@@ -2045,10 +2064,16 @@ function getEventState(date,time,dur){
 // ══════════════════════════════════════
 // SCHEDULE SHEET
 // ══════════════════════════════════════
-function openScheduleSheet(id=null){
+function openScheduleSheet(id=null, isReschedule=false){
+  if(!isReschedule) reschedulingSc=null;
   editingSc=id;
   const s=id?schedules.find(x=>x.id===id):null;
-  document.getElementById('sch-sheet-title').textContent=id?'Edit Schedule':'New Schedule';
+  if(s){
+    const key=s.id+'_'+s.date;
+    const state=computeOccState(s.time,s.dur,s.date,doneSchedules[key]);
+    if(state==='alerting'){ doneSchedules[key]='ongoing'; driveSaveData(); runAlertCheck(); }
+  }
+  document.getElementById('sch-sheet-title').textContent = isReschedule ? 'Reschedule (missed)' : (id?'Edit Schedule':'New Schedule');
   document.getElementById('sc-title').value=s?s.title:'';
   document.getElementById('sc-date').value=s?s.date:schSelDate;
   document.getElementById('sc-time').value=s?s.time:'09:00';
@@ -2060,6 +2085,14 @@ function openScheduleSheet(id=null){
   // focus removed - unreliable on mobile
 }
 
+function startReschedule(id, oldDate){
+  reschedulingSc = {id, oldDate};
+  openScheduleSheet(id, true);
+  document.getElementById('sc-date').value='';
+  document.getElementById('sc-time').value='09:00';
+  document.getElementById('sc-conflict-box').innerHTML=`<div style="font-size:12px;color:var(--text-dim);padding:6px 0">Pick a new date & time for this missed schedule.</div>`;
+}
+
 async function saveSchedule(){
   const title=document.getElementById('sc-title').value.trim();
   if(!title){showToast('Enter a title');return;}
@@ -2067,6 +2100,11 @@ async function saveSchedule(){
   const time=document.getElementById('sc-time').value;
   const dur=+document.getElementById('sc-dur').value||60;
   const startMin=timeToMin(time);
+
+  if(reschedulingSc && reschedulingSc.id===editingSc && !date){
+    showToast('Pick a new date to reschedule');
+    return;
+  }
 
   if(date && hasConflict(date,startMin,dur,editingSc)){
     const{before,after}=findNextSlot(date,time,dur,editingSc);
@@ -2083,8 +2121,17 @@ async function saveSchedule(){
   else schedules.push(obj);
   document.getElementById('sch-overlay').classList.remove('open');
   renderSchStrip();renderSchedule();renderCalView();
-  showToast(editingSc?'Schedule updated':'Schedule added');
+
+  if(reschedulingSc && reschedulingSc.id===editingSc){
+    doneSchedules[reschedulingSc.id+'_'+reschedulingSc.oldDate]=true;
+    reschedulingSc=null;
+    showToast('Rescheduled — previous occurrence marked done');
+  } else {
+    showToast(editingSc?'Schedule updated':'Schedule added');
+  }
+
   renderEvents();
+  runAlertCheck();
   driveSaveData();
 }
 
@@ -2139,6 +2186,7 @@ function renderRoutine(){
       notes: r.description||'',
       done: completions[r.id+'_'+today] === true,
       missed: completions[r.id+'_'+today] === 'missed',
+      ongoing: computeOccState(r.time, r.dur, today, completions[r.id+'_'+today]) === 'ongoing',
       _type:'routine'
     }));
 
@@ -2172,7 +2220,7 @@ function renderRoutine(){
       </div>`;
     }
     const endT = tlEndTime(row.time, row.dur);
-    const doneClass = row.done ? 'sch-card-done' : row.missed ? 'sch-card-missed' : '';
+    const doneClass = row.done ? 'sch-card-done' : row.missed ? 'sch-card-missed' : row.ongoing ? 'sch-card-ongoing' : '';
     const doneCheck = row.done
       ? `<div class="sch-done-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>`
       : '';
@@ -2189,7 +2237,7 @@ function renderRoutine(){
           ${doneCheck}
           <div class="sch-card-title">${esc(row.title)}</div>
           ${row.notes?`<div class="sch-card-notes">${esc(row.notes)}</div>`:''}
-          ${!row.done && !row.missed?`<button class="sch-done-btn" onclick="event.stopPropagation();toggleRoutineCheck('${row.id}','${today}')">✓ Done</button>`:''}
+          ${row.ongoing?`<button class="sch-done-btn" onclick="event.stopPropagation();toggleRoutineCheck('${row.id}','${today}')">✓ Close</button>`:''}
           <button onclick="event.stopPropagation();openRoutineSheet('${row.id}')" style="position:absolute;top:10px;right:10px;background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;display:flex;align-items:center;justify-content:center">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
@@ -2373,6 +2421,75 @@ function checkDailyReset(){
   driveSaveData();
 }
 
+function computeOccState(time, dur, ds, storeVal){
+  if(storeVal===true) return 'done';
+  if(storeVal==='missed') return 'missed';
+  if(!time) return storeVal==='ongoing' ? 'ongoing' : 'pending';
+  const start=dsToDate(ds);
+  const [h,m]=time.split(':').map(Number);
+  start.setHours(h,m,0,0);
+  const end=new Date(start.getTime()+(+dur||30)*60000);
+  const now=new Date();
+  if(storeVal==='ongoing') return now>end ? 'missed' : 'ongoing';
+  if(now>end) return 'missed';
+  if(now>=new Date(start.getTime()-5*60000)) return 'alerting';
+  return 'pending';
+}
+
+let alertBannerItem=null;
+
+function runAlertCheck(){
+  const today=todayStr();
+  let bannerCandidates=[];
+
+  schedules.filter(s=>s.date===today).forEach(s=>{
+    const key=s.id+'_'+today;
+    const state=computeOccState(s.time,s.dur,today,doneSchedules[key]);
+    if(state==='missed' && doneSchedules[key]!=='missed'){
+      doneSchedules[key]='missed';
+      archiveItem({id:s.id,title:s.title,date:today,time:s.time,dur:s.dur,notes:s.notes||'',_type:'schedule',status:'missed'});
+      driveSaveData();
+    }
+    if(state==='alerting'||state==='ongoing') bannerCandidates.push({type:'schedule',id:s.id,title:s.title,state});
+  });
+
+  routines.filter(r=>routineAppliesOn(r,today)).forEach(r=>{
+    const key=r.id+'_'+today;
+    const state=computeOccState(r.time,r.dur,today,completions[key]);
+    if(state==='missed' && completions[key]!=='missed'){
+      completions[key]='missed';
+      driveSaveData();
+    }
+    if(state==='alerting'||state==='ongoing') bannerCandidates.push({type:'routine',id:r.id,title:r.title,state});
+  });
+
+  // ongoing takes priority over alerting; with no time conflicts allowed, there should only ever be one candidate
+  bannerCandidates.sort((a,b)=> (a.state==='ongoing'?0:1) - (b.state==='ongoing'?0:1));
+  alertBannerItem = bannerCandidates[0] || null;
+  renderAlertBanner();
+
+  if(document.getElementById('view-schedule').classList.contains('active')) renderSchedule();
+  if(document.getElementById('view-routine').classList.contains('active')) renderRoutine();
+}
+
+function renderAlertBanner(){
+  const el=document.getElementById('alert-banner');
+  if(!alertBannerItem){ el.classList.remove('show'); return; }
+  document.getElementById('ab-title').textContent=alertBannerItem.title;
+  document.getElementById('ab-sub').textContent = alertBannerItem.state==='ongoing' ? 'Ongoing now' : 'Starting soon';
+  el.classList.add('show');
+}
+
+function alertBannerTap(){
+  if(!alertBannerItem) return;
+  const {type,id}=alertBannerItem;
+  const key=id+'_'+todayStr();
+  if(type==='schedule'){ doneSchedules[key]='ongoing'; openScheduleSheet(id); }
+  else { completions[key]='ongoing'; openRoutineSheet(id); }
+  driveSaveData();
+  runAlertCheck();
+}
+
 function archiveItem(item){
   if(!window.calendarArchive) window.calendarArchive = [];
   const exists = window.calendarArchive.find(x => x.id === item.id && x.date === item.date);
@@ -2439,6 +2556,12 @@ function toggleDay(btn){btn.classList.toggle('on');}
 function openRoutineSheet(id=null){
   editingRt = id;
   const r = id ? routines.find(x=>x.id===id) : null;
+  if(r){
+    const today=todayStr();
+    const key=r.id+'_'+today;
+    const state=computeOccState(r.time,r.dur,today,completions[key]);
+    if(state==='alerting'){ completions[key]='ongoing'; driveSaveData(); runAlertCheck(); }
+  }
   document.getElementById('rt-sheet-title').textContent = id ? 'Edit Routine' : 'New Routine';
   document.getElementById('rt-title').value = r ? r.title : '';
   document.getElementById('rt-time').value  = r ? r.time  : '07:00';
