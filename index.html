@@ -101,7 +101,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .ev-hcard.cover-lg{min-height:280px}
   
 /* ── Section label ── */
-.slabel{font-size:11px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin:18px 0 10px}
+.slabel{font-size:18px;font-weight:800;color:var(--text-pri);text-transform:none;letter-spacing:.02em;margin:18px 0 10px}
 
 /* ── Unified Card (Schedule, Routine, Calendar detail) ── */
 .uni-card{background:var(--bg-card2);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;cursor:pointer;transition:border-color .15s}
@@ -215,7 +215,6 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 /* ── Event Horizontal Cards ── */
 .ev-scroll{overflow-x:auto;overflow-y:hidden;display:flex;gap:14px;padding:4px 20px 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-y pan-x;overscroll-behavior-x:contain}
 .ev-scroll::-webkit-scrollbar{display:none}
-@media(min-width:600px){.ev-scroll{overflow-x:visible;overflow-y:visible;flex-wrap:wrap;gap:16px}.ev-hcard{min-width:0;max-width:none;flex:1 1 calc(50% - 8px)}}
 @media(min-width:900px){.ev-hcard{flex:1 1 calc(33% - 11px)}}
 /* ══ Events Tab Two-List Layout ══ */
 .ev-section-title{font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;padding:20px 20px 10px;clear:both;position:relative}
@@ -1344,6 +1343,11 @@ function fmtTimeEnd(t,dur){if(!t)return'';const[h,m]=t.split(':').map(Number);co
 function addMinutes(t,min){const[h,m]=t.split(':').map(Number);const tot=h*60+m+min;return p2(Math.floor(tot/60)%24)+':'+p2(tot%60)}
 function timeToMin(t){if(!t)return 0;const[h,m]=t.split(':').map(Number);return h*60+m}
 function dsToDate(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
+function eventCalDate(e){
+  if(e.date) return e.date;
+  if(e.createdAt) return e.createdAt.slice(0,10);
+  return '';
+}
 function friendlyDate(s){const d=dsToDate(s);return DAYS_FULL[d.getDay()]+', '+MONTHS_FULL[d.getMonth()]+' '+d.getDate()}
 
 // ══════════════════════════════════════
@@ -1692,11 +1696,12 @@ function toggleOpenState(){
   const ev = events.find(x => x.id === ndEventId);
   if(!ev) return;
   const newState = (ev.openState || 'open') === 'open' ? 'closed' : 'open';
+  const dateFix = (newState === 'closed' && !ev.date) ? {date: todayStr()} : {};
   events = events.map(e => e.id === ndEventId
-    ? Object.assign({}, e, {openState: newState})
+    ? Object.assign({}, e, {openState: newState}, dateFix)
     : e
   );
-  renderEvents();
+  renderEvents(); renderCalView();
   openNoteDetail(ndEventId);
   driveSaveData();
 }  
@@ -1790,14 +1795,16 @@ function getSchedulesOnDate(ds){
   routines.forEach(r=>{
     if(routineAppliesOn(r,ds)) items.push({...r,_type:'routine',date:ds});
   });
+  events.filter(e=>eventCalDate(e)===ds).forEach(e=>items.push({...e,_type:'event',date:ds,time:e.time||''}));
   return items.sort((a,b)=>timeToMin(a.time)-timeToMin(b.time));
 }
 
 function uniCard(item, onclick){
   const isRoutine = item._type==='routine';
-  const typeLabel = isRoutine ? 'Routine' : 'Schedule';
-  const typeBadgeColor = isRoutine ? 'var(--green)' : 'var(--text-sec)';
-  const typeBadgeBg = isRoutine ? 'var(--green-dim)' : 'var(--bg-input)';
+  const isEvent = item._type==='event';
+  const typeLabel = isRoutine ? 'Routine' : isEvent ? 'Event' : 'Schedule';
+  const typeBadgeColor = isRoutine ? 'var(--green)' : isEvent ? 'var(--lime)' : 'var(--text-sec)';
+  const typeBadgeBg = isRoutine ? 'var(--green-dim)' : isEvent ? 'var(--lime-dim)' : 'var(--bg-input)';
   const desc = item.notes || item.description || '';
   return `<div class="uni-card" onclick="${onclick}">
     <div class="uni-card-top">
@@ -2541,8 +2548,10 @@ function renderWeekView(){
       html+=`<div class="wg-cell">`;
       cellItems.forEach(item=>{
         const isRoutine=item._type==='routine';
+        const isEvent=item._type==='event';
         const cls=isRoutine?'routine':(getEventState(item.date,item.time,item.dur));
-        html+=`<div class="wg-event ${cls}" onclick="${isRoutine?`openRoutineDetail('${item.id}')`:`openScheduleSheet('${item.id}')`}" title="${esc(item.title)}">${esc(item.title)}</div>`;
+        const clickFn=isRoutine?`openRoutineDetail('${item.id}')`:isEvent?`openNoteDetail('${item.id}')`:`openScheduleSheet('${item.id}')`;
+        html+=`<div class="wg-event ${cls}" onclick="${clickFn}" title="${esc(item.title)}">${esc(item.title)}</div>`;
       });
       html+=`</div>`;
     });
@@ -2567,12 +2576,19 @@ function renderMonthView(){
   for(let day=1;day<=daysInMonth;day++){
     const d=new Date(base.getFullYear(),base.getMonth(),day);
     const ds=toDS(d);
-    const count=getSchedulesOnDate(ds).length;
+    const dayItems=getSchedulesOnDate(ds);
+    const evCount=dayItems.filter(x=>x._type==='event').length;
+    const schCount=dayItems.filter(x=>x._type==='schedule').length;
+    const rtCount=dayItems.filter(x=>x._type==='routine').length;
     const isToday=ds===todayStr();
     const isSel=ds===calSelDate;
     html+=`<div class="mg-cell${isToday?' today':''}${isSel?' sel':''}" onclick="calDayTap('${ds}')">
       <div class="mg-num">${day}</div>
-      ${count?`<div class="mg-count">${count}</div>`:''}
+      <div class="mg-count-row" style="display:flex;gap:3px;margin-top:2px">
+        ${evCount?`<span class="mg-count" style="background:rgba(200,232,50,.18);color:var(--lime)">${evCount}</span>`:''}
+        ${schCount?`<span class="mg-count" style="background:var(--bg-input);color:var(--text-sec)">${schCount}</span>`:''}
+        ${rtCount?`<span class="mg-count" style="background:var(--green-dim);color:var(--green)">${rtCount}</span>`:''}
+      </div>
     </div>`;
   }
   html+=`</div>`;
@@ -2598,7 +2614,8 @@ function showDayDetail(ds){
   }
   list.innerHTML=items.map(item=>{
     const isRoutine=item._type==='routine';
-    const onclick=isRoutine?`openRoutineDetail('${item.id}')`:`openScheduleSheet('${item.id}')`;
+    const isEvent=item._type==='event';
+    const onclick=isRoutine?`openRoutineDetail('${item.id}')`:isEvent?`openNoteDetail('${item.id}')`:`openScheduleSheet('${item.id}')`;
     return uniCard(item, onclick);
   }).join('');
   panel.style.display='block';
