@@ -125,7 +125,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .empty svg{width:40px;height:40px;opacity:.2;display:block;margin:0 auto 14px}
 
 /* ── Note Detail View ── */
-.note-detail{position:fixed;inset:0;background:#1e1a14;z-index:150;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);pointer-events:none}
+.note-detail{position:fixed;inset:0;height:100dvh;background:#1e1a14;z-index:150;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);pointer-events:none}
 .note-detail.open{transform:translateY(0);pointer-events:all}
 .nd-topbar{padding:max(var(--safe-t),14px) 20px 12px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .nd-back{width:36px;height:36px;border-radius:50%;background:var(--bg-card2);border:none;color:var(--text-pri);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -1528,10 +1528,12 @@ function renderEvents(){
       const skin = e._source==='routine' ? 'routine' : (isSchRt ? 'tinted' : 'dark');
       const tags=(e.tag||'').split(' ').filter(Boolean);
       const timeLbl=e.date?(()=>{
-        const d=new Date(e.date+'T00:00:00');
-        const now=new Date();
-        const diff=Math.round((d-now)/(1000*60*60*24));
-        if(diff===0) return 'Today'+(e.time?' at '+fmtTime(e.time):'');
+        const today = todayStr();
+        if(e.date === today) return 'Today'+(e.time?' at '+fmtTime(e.time):'');
+        // Compute day difference using date-only values (no time-of-day skew)
+        const d = dsToDate(e.date);
+        const t = dsToDate(today);
+        const diff = Math.round((d - t) / (1000*60*60*24));
         if(diff===1) return 'Tomorrow'+(e.time?' at '+fmtTime(e.time):'');
         if(diff===-1) return 'Yesterday';
         return e.date+(e.time?' · '+fmtTime(e.time):'');
@@ -2770,8 +2772,7 @@ function openNoteDetail(id, source='event'){
   document.getElementById('nd-cover-size-row').style.display = hasCoverNow ? 'block' : 'none';
   const cardPosRow = document.getElementById('nd-card-pos-row');
   if(cardPosRow){
-    cardPosRow.style.display = (hasCoverNow && source==='event') ? 'flex' : 'none';
-    if(source==='event') document.getElementById('nd-card-pos-slider').value = (e.coverCardPosition != null) ? e.coverCardPosition : 50;
+    cardPosRow.style.display = hasCoverNow ? 'block' : 'none';
   }
   ndUpdateCoverSizeButtons(e.coverSize||'md');
   ndShowCover(null);
@@ -2824,7 +2825,9 @@ function openNoteDetail(id, source='event'){
 }
 
 function closeNoteDetail(){
-  document.getElementById('note-detail').classList.remove('open');
+  const el = document.getElementById('note-detail');
+  el.classList.remove('open');
+  el.style.height = '';
   document.getElementById('nd-dropdown').classList.remove('open');
   ndEventId = null;
   ndItemSource = 'event';
@@ -3258,13 +3261,25 @@ async function confirmCrop(){
     closeCropModal();
 
     if(_cropMode === 'card'){
-      // Save as card crop — used as background-image on the ev-hcard
-      events = events.map(ev => ev.id === ndEventId
-        ? Object.assign({}, ev, { coverCardCrop: croppedDataUrl, coverCardPosition: 50 })
-        : ev
-      );
+      // Save as card crop — used as background-image on the card, for any source type
+      if(ndItemSource === 'schedule'){
+        schedules = schedules.map(s => s.id === ndEventId
+          ? Object.assign({}, s, { coverCardCrop: croppedDataUrl, coverCardPosition: 50 })
+          : s
+        );
+      } else if(ndItemSource === 'routine'){
+        routines = routines.map(r => r.id === ndEventId
+          ? Object.assign({}, r, { coverCardCrop: croppedDataUrl, coverCardPosition: 50 })
+          : r
+        );
+      } else {
+        events = events.map(ev => ev.id === ndEventId
+          ? Object.assign({}, ev, { coverCardCrop: croppedDataUrl, coverCardPosition: 50 })
+          : ev
+        );
+      }
       coverCache['card_'+ndEventId] = croppedDataUrl;
-      // Update live card
+      // Update live card if visible
       const cardEl = document.getElementById('ev-hcard-' + ndEventId);
       if(cardEl){
         cardEl.classList.add('has-cover');
@@ -3456,6 +3471,24 @@ async function ndAutoSave(){
   renderEvents();
   clearTimeout(ndAutoSaveTimer);
   ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
+}
+
+// ══════════════════════════════════════
+// MOBILE KEYBOARD HANDLING
+// ══════════════════════════════════════
+// On mobile, the on-screen keyboard can cover fixed-position bottom UI.
+// Track visualViewport changes and resize the note-detail panel so the
+// formatting toolbar / bottom bar stays visible above the keyboard.
+if(window.visualViewport){
+  const ndEl = () => document.getElementById('note-detail');
+  const applyViewportHeight = () => {
+    const el = ndEl();
+    if(!el || !el.classList.contains('open')) return;
+    const vh = window.visualViewport.height;
+    el.style.height = vh + 'px';
+  };
+  window.visualViewport.addEventListener('resize', applyViewportHeight);
+  window.visualViewport.addEventListener('scroll', applyViewportHeight);
 }
 
 // ══════════════════════════════════════
