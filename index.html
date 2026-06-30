@@ -599,6 +599,12 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
       <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
       No events yet.
     </div>
+    <!-- Events List -->
+    <div style="padding:14px 20px 6px">
+      <div style="font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Events List <span id="events-list-count" style="font-weight:400;opacity:.6"></span></div>
+    </div>
+    <div class="ev-scroll" id="events-list-strip"></div>
+    <div class="empty" id="events-list-empty" style="display:none;margin:0 20px">No open events.</div>
     <!-- All List -->
     <div class="ev-section-title">All List</div>
     <div class="ev-all-grid" id="ev-all-grid"></div>
@@ -1513,7 +1519,7 @@ function renderEvents(){
         const da=a.updatedAt||a.createdAt||'', db=b.updatedAt||b.createdAt||'';
         return db>da?1:-1;
       }).slice(0,24)
-    : [...openEvents, ...upcomingSchRt]
+    : [...upcomingSchRt]
         .sort((a,b)=>{
           const ord = {present:0, future:1};
           const ta = ord[a._timeState] ?? 2, tb = ord[b._timeState] ?? 2;
@@ -1634,6 +1640,28 @@ function renderEvents(){
     if(emptyEl) emptyEl.style.display='none';
     el.innerHTML = actionItems.map(e=>buildEventCardHTML(e,'ev-hcard-')).join('');
     loadCardCovers(actionItems, 'ev-hcard-');
+  }
+
+  // ── EVENTS LIST: every open event, dated or undated, newest-updated first ──
+  const openEventItems = evItems
+    .filter(e=>(e.openState||'open')==='open')
+    .sort((a,b)=>{
+      const da=a.updatedAt||a.createdAt||'', db=b.updatedAt||b.createdAt||'';
+      return db>da?1:-1;
+    });
+  const elsEl = document.getElementById('events-list-strip');
+  const elsEmptyEl = document.getElementById('events-list-empty');
+  const elsCountEl = document.getElementById('events-list-count');
+  if(elsCountEl) elsCountEl.textContent = `(${openEventItems.length})`;
+  if(elsEl){
+    if(!openEventItems.length){
+      elsEl.innerHTML='';
+      if(elsEmptyEl) elsEmptyEl.style.display='flex';
+    } else {
+      if(elsEmptyEl) elsEmptyEl.style.display='none';
+      elsEl.innerHTML = openEventItems.map(e=>buildEventCardHTML(e,'ev-list-')).join('');
+      loadCardCovers(openEventItems, 'ev-list-');
+    }
   }
 
   // ── ALL LIST (2-column grid, newest first, same card styling as Action List) ──
