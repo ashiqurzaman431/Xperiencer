@@ -68,6 +68,9 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .card.past{opacity:.55;border-left:3px solid var(--text-dim)}
 .card.present{border-left:3px solid var(--lime);box-shadow:0 0 0 1px rgba(200,232,50,.12)}
 .card.future{border-left:3px solid var(--amber)}
+#quote-display-card.has-cover{background-size:cover;background-repeat:no-repeat;position:relative}
+#quote-display-card.has-cover::before{content:'';position:absolute;inset:0;border-radius:16px;background:linear-gradient(165deg,rgba(10,8,5,.35) 0%,rgba(10,8,5,.55) 40%,rgba(8,6,4,.88) 100%);pointer-events:none;z-index:0}
+#quote-display-card.has-cover #quote-display-text{position:relative;z-index:1;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9),0 2px 14px rgba(0,0,0,.6)}
 
 .card-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
 .card-title{font-size:15px;font-weight:700;color:var(--text-pri);line-height:1.3;flex:1;padding-right:10px}
@@ -592,6 +595,14 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     </div>
   </div>
   <div style="flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:block;-webkit-overflow-scrolling:touch;scrollbar-width:none" id="events-scroll">
+    <!-- Quote Display -->
+    <div style="padding:0 20px 6px" id="quote-display-wrap">
+      <div style="font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Quote Display</div>
+      <div class="card" id="quote-display-card" style="display:none;text-align:center;padding:22px 18px;cursor:default" onclick="event.stopPropagation()">
+        <div style="font-size:16px;font-weight:700;color:var(--text-pri);line-height:1.5" id="quote-display-text"></div>
+      </div>
+      <div class="empty" id="quote-display-empty" style="display:none;margin:0">No quotes yet.</div>
+    </div>
     <!-- Action List -->
     <div style="padding:0 20px 6px">
       <div style="font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Action List <span id="action-count" style="font-weight:400;opacity:.6"></span></div>
@@ -607,6 +618,12 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     </div>
     <div class="ev-scroll" id="events-list-strip"></div>
     <div class="empty" id="events-list-empty" style="display:none;margin:0 20px">No open events.</div>
+    <!-- Quotes Picks -->
+    <div style="padding:14px 20px 6px">
+      <div style="font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Quotes Picks <span id="quotes-picks-count" style="font-weight:400;opacity:.6"></span></div>
+    </div>
+    <div class="ev-scroll" id="quotes-picks-strip"></div>
+    <div class="empty" id="quotes-picks-empty" style="display:none;margin:0 20px">No quotes yet.</div>
     <!-- All List -->
     <div class="ev-section-title">All List</div>
     <div style="padding:0 20px 12px">
@@ -744,6 +761,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div class="state-row">
       <button id="st-open" class="state-btn" onclick="selectState('open')">Open</button>
       <button id="st-closed" class="state-btn" onclick="selectState('closed')">Closed</button>
+      <button id="st-quote" class="state-btn" onclick="selectState('quote')">Quote</button>
     </div>
     <div id="ev-conflict-box"></div>
     <button class="sheet-btn" onclick="saveEvent()">Save Event</button>
@@ -1492,6 +1510,104 @@ function onAllSearchInput(v){
   renderEvents();
 }
 
+// ── QUOTE DISPLAY: one quote per session, no repeats until every quote has shown once ──
+function renderQuoteDisplay(quoteItems){
+  const cardEl = document.getElementById('quote-display-card');
+  const textEl = document.getElementById('quote-display-text');
+  const emptyEl = document.getElementById('quote-display-empty');
+  if(!cardEl) return;
+
+  if(!quoteItems.length){
+    cardEl.style.display='none';
+    if(emptyEl) emptyEl.style.display='flex';
+    return;
+  }
+  if(emptyEl) emptyEl.style.display='none';
+
+  // If this session already picked a quote, and it still exists, keep showing it
+  const sessionPickId = sessionStorage.getItem('ll_quoteDisplay_sessionId');
+  let pick = sessionPickId ? quoteItems.find(q=>q.id===sessionPickId) : null;
+
+  if(!pick){
+    // Load or init the no-repeat pool
+    let pool = [];
+    try{ pool = JSON.parse(localStorage.getItem('ll_quoteDisplay_pool')||'[]'); }catch(e){ pool=[]; }
+    const validIds = new Set(quoteItems.map(q=>q.id));
+    pool = pool.filter(id=>validIds.has(id)); // drop ids of deleted quotes
+
+    if(!pool.length){
+      // Refill & shuffle a fresh pool of all current quote ids
+      pool = quoteItems.map(q=>q.id);
+      for(let i=pool.length-1;i>0;i--){
+        const j=Math.floor(Math.random()*(i+1));
+        [pool[i],pool[j]]=[pool[j],pool[i]];
+      }
+    }
+    const pickId = pool.pop();
+    localStorage.setItem('ll_quoteDisplay_pool', JSON.stringify(pool));
+    sessionStorage.setItem('ll_quoteDisplay_sessionId', pickId);
+    pick = quoteItems.find(q=>q.id===pickId) || quoteItems[0];
+  }
+
+  cardEl.style.display='block';
+  textEl.textContent = `\u201C${pick.title||''}\u201D`;
+
+  // Use the same cover image as the quote's card, if it has one
+  const cardBgUrl = pick.coverCardCrop
+    ? (coverCache['card_'+pick.id] || pick.coverCardCrop)
+    : (pick.hasCover && coverCache[pick.id] ? coverCache[pick.id] : null);
+
+  if(cardBgUrl){
+    cardEl.classList.add('has-cover');
+    cardEl.style.backgroundImage = `url('${cardBgUrl}')`;
+    cardEl.style.backgroundPosition = `center ${pick.coverCardPosition != null ? pick.coverCardPosition : 50}%`;
+  } else {
+    cardEl.classList.remove('has-cover');
+    cardEl.style.backgroundImage = '';
+  }
+
+  if(pick.hasCover && !coverCache[pick.id]){
+    driveLoadCover(pick.id).then(dataUrl=>{
+      if(!dataUrl) return;
+      coverCache[pick.id] = dataUrl;
+      // Only apply if this is still the quote currently on display
+      const sessionPickId = sessionStorage.getItem('ll_quoteDisplay_sessionId');
+      if(sessionPickId !== pick.id) return;
+      if(!pick.coverCardCrop && !coverCache['card_'+pick.id]){
+        cardEl.classList.add('has-cover');
+        cardEl.style.backgroundImage = `url('${dataUrl}')`;
+        cardEl.style.backgroundPosition = `center ${pick.coverCardPosition != null ? pick.coverCardPosition : 50}%`;
+      }
+    });
+  }
+}
+
+// ── QUOTES PICKS: latest 20 added/edited quotes ──
+function renderQuotesPicks(quoteItems, buildEventCardHTML, loadCardCovers){
+  const el = document.getElementById('quotes-picks-strip');
+  const emptyEl = document.getElementById('quotes-picks-empty');
+  const countEl = document.getElementById('quotes-picks-count');
+  if(!el) return;
+
+  if(!quoteItems.length){
+    el.innerHTML='';
+    if(emptyEl) emptyEl.style.display='flex';
+    if(countEl) countEl.textContent='';
+    return;
+  }
+  if(emptyEl) emptyEl.style.display='none';
+
+  const sorted = [...quoteItems].sort((a,b)=>{
+    const da=a.updatedAt||a.createdAt||'', db=b.updatedAt||b.createdAt||'';
+    return db.localeCompare(da);
+  });
+  const picks = sorted.slice(0,20);
+
+  if(countEl) countEl.textContent = `(${picks.length}/20)`;
+  el.innerHTML = picks.map(e=>buildEventCardHTML(e,'quotes-picks-')).join('');
+  loadCardCovers(picks, 'quotes-picks-');
+}
+
 function renderEvents(){
   const today = todayStr();
 
@@ -1518,8 +1634,9 @@ function renderEvents(){
   // ── ACTION LIST: open events + upcoming sch/rt, merged into one true time-sorted list ──
   const openEvents = evItems
     .filter(e=>{
-      // Remove past events and closed events from action list
+      // Remove past events, closed events, and quotes from action list
       if((e.openState||'open') === 'closed') return false;
+      if((e.openState||'open') === 'quote') return false;
       if(e._timeState === 'past') return false;
       if(eTab === 'closed') return (e.openState||'open') === 'closed';
       if(eTab === 'open') return (e.openState||'open') === 'open';
@@ -1598,16 +1715,21 @@ function renderEvents(){
     const coverInlineStyle = cardBgUrl
       ? ` style="background-image:url('${cardBgUrl}');background-position:center ${e.coverCardPosition != null ? e.coverCardPosition : 50}%"`
       : '';
-    const bodyText = e.body ? e.body.replace(/<[^>]*>/g,'').trim() : '';
+    const isQuote = e._source==='event' && (e.openState||'open')==='quote';
+    const bodyText = (!isQuote && e.body) ? e.body.replace(/<[^>]*>/g,'').trim() : '';
+    const displayTitle = isQuote ? `\u201C${e.title||''}\u201D` : (e.title||'Untitled');
     const timeState = e._timeState;
     return `<div class="ev-hcard ${skin}${hasCover?' has-cover':''}${coverSizeClass}" id="${idPrefix}${e.id}"${coverInlineStyle} onclick="${clickFn}">
         <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[timeState]||actionIcons.future}</button>
         <div class="ev-icon">${cardIcons[timeState]||cardIcons.future}</div>
         ${typeBadge}
-        <div class="ev-title">${esc(e.title||'Untitled')}</div>
+        <div class="ev-title">${esc(displayTitle)}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px">
           ${timeState?`<span class="state-badge ${timeState}">${{past:'Past',present:'Present',future:'Future'}[timeState]}</span>`:''}
-          ${e._source==='event'?`<span class="state-badge" style="background:${(e.openState||'open')==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${(e.openState||'open')==='closed'?'var(--red)':'var(--lime)'};font-weight:800">${(e.openState||'open')==='closed'?'Closed':'Open'}</span>`:''}
+          ${e._source==='event'?(isQuote
+            ? `<span class="state-badge" style="background:rgba(245,200,66,.14);color:var(--amber);font-weight:800">Quote</span>`
+            : `<span class="state-badge" style="background:${(e.openState||'open')==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${(e.openState||'open')==='closed'?'var(--red)':'var(--lime)'};font-weight:800">${(e.openState||'open')==='closed'?'Closed':'Open'}</span>`
+          ):''}
         </div>
         ${tags.length?`<div class="ev-tags">${tags.map(t=>`<span class="ev-tag">${esc(t)}</span>`).join('')}</div>`:''}
         ${bodyText?`<div class="ev-body">${esc(bodyText)}</div>`:'<div class="ev-body" style="flex:1"></div>'}
@@ -1701,6 +1823,11 @@ function renderEvents(){
     }
   }
 
+  // ── QUOTES: pull all quote-type events, feed Quote Display + Quotes Picks ──
+  const quoteItems = evItems.filter(e=>(e.openState||'open')==='quote');
+  renderQuoteDisplay(quoteItems);
+  renderQuotesPicks(quoteItems, buildEventCardHTML, loadCardCovers);
+
 
   // ── Deletion log ──
   const logEl = document.getElementById('deletion-log-section');
@@ -1749,12 +1876,14 @@ function selectState(s){
   evState=s;
   document.getElementById('st-open').className='state-btn'+(s==='open'?' sel-present':'');
   document.getElementById('st-closed').className='state-btn'+(s==='closed'?' sel-past':'');
+  document.getElementById('st-quote').className='state-btn'+(s==='quote'?' sel-future':'');
 }
 
 function toggleOpenState(){
   if(!ndEventId) return;
   const ev = events.find(x => x.id === ndEventId);
   if(!ev) return;
+  if((ev.openState||'open') === 'quote') return; // quotes only change state via the edit sheet
   const newState = (ev.openState || 'open') === 'open' ? 'closed' : 'open';
   const dateFix = (newState === 'closed' && !ev.date) ? {date: todayStr()} : {};
   events = events.map(e => e.id === ndEventId
@@ -2928,7 +3057,11 @@ function openNoteDetail(id, source='event'){
     metaHtml += `<span class="nd-state-badge ${timeState}">${timeLbls[timeState]}</span>`;
   }
   if(source==='event'){
-    metaHtml += `<span class="nd-state-badge" onclick="toggleOpenState()" style="cursor:pointer;background:${openState==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${openState==='closed'?'var(--red)':'var(--green)'};font-weight:800">${openState==='closed'?'Closed':'Open'}</span>`;
+    if(openState==='quote'){
+      metaHtml += `<span class="nd-state-badge" style="background:rgba(245,200,66,.14);color:var(--amber);font-weight:800">Quote</span>`;
+    } else {
+      metaHtml += `<span class="nd-state-badge" onclick="toggleOpenState()" style="cursor:pointer;background:${openState==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${openState==='closed'?'var(--red)':'var(--green)'};font-weight:800">${openState==='closed'?'Closed':'Open'}</span>`;
+    }
   } else {
     const srcBg = source==='routine' ? 'rgba(200,232,50,.12)' : 'var(--bg-input)';
     const srcColor = source==='routine' ? 'var(--lime)' : 'var(--text-sec)';
