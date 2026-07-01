@@ -9,8 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="Xperiencer">
 <title>Xperiencer</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="icons/icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
@@ -3005,6 +3005,9 @@ function openNoteDetail(id, source='event'){
 }
 
 function closeNoteDetail(){
+  // Flush any pending debounced version/render/save before we lose ndEventId
+  clearTimeout(ndRenderTimer);
+  ndFlushHeavyUpdate();
   const el = document.getElementById('note-detail');
   el.classList.remove('open');
   el.style.height = '';
@@ -3617,21 +3620,39 @@ function coverDragEnd(){
 }
 
 let ndAutoSaveTimer = null;
+let ndRenderTimer = null;
+// ndAutoSave runs on every keystroke but does ONLY the cheap part: update
+// the in-memory model. It does NOT touch the DOM (no renderEvents, no
+// innerHTML rewrites) and does NOT compute version history on every char.
+// That heavy work is deferred to ndFlushHeavyUpdate, which runs only after
+// the user pauses typing (debounced), so typing itself stays fast.
 async function ndAutoSave(){
   if(!ndEventId) return;
   const titleEl = document.getElementById('nd-note-title');
   const bodyEl  = document.getElementById('nd-note-body');
   const newTitle = titleEl.textContent.trim();
   const newBody  = bodyEl.innerHTML;
+
   if(ndItemSource === 'schedule'){
     schedules = schedules.map(s => s.id !== ndEventId ? s : Object.assign({}, s, {body: newBody}));
-    renderEvents();
-    clearTimeout(ndAutoSaveTimer);
-    ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
-    return;
-  }
-  if(ndItemSource === 'routine'){
+  } else if(ndItemSource === 'routine'){
     routines = routines.map(r => r.id !== ndEventId ? r : Object.assign({}, r, {body: newBody}));
+  } else {
+    events = events.map(e => e.id !== ndEventId ? e : Object.assign({}, e, {
+      title: newTitle || e.title,
+      body: newBody || e.body,
+      updatedAt: new Date().toISOString()
+    }));
+  }
+
+  // Debounce the expensive stuff (version snapshot + full list re-render + Drive save)
+  clearTimeout(ndRenderTimer);
+  ndRenderTimer = setTimeout(ndFlushHeavyUpdate, 400);
+}
+
+function ndFlushHeavyUpdate(){
+  if(!ndEventId) return;
+  if(ndItemSource === 'schedule' || ndItemSource === 'routine'){
     renderEvents();
     clearTimeout(ndAutoSaveTimer);
     ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
@@ -3639,14 +3660,10 @@ async function ndAutoSave(){
   }
   events = events.map(e => {
     if(e.id !== ndEventId) return e;
-    const oldLen = (e.body||'').replace(/<[^>]*>/g,'').length;
-    const newLen = newBody.replace(/<[^>]*>/g,'').length;
+    const oldLen = (e._lastVersionedBody!=null ? e._lastVersionedBody : e.body||'').replace(/<[^>]*>/g,'').length;
+    const newLen = (e.body||'').replace(/<[^>]*>/g,'').length;
     const vLabel = newLen > oldLen ? 'Extended' : newLen < oldLen ? 'Shortened' : 'Edited';
-    const updated = Object.assign({}, e, {
-      title: newTitle || e.title,
-      body: newBody || e.body,
-      updatedAt: new Date().toISOString()
-    });
+    const updated = Object.assign({}, e, {_lastVersionedBody: e.body});
     updated.versions = pushVersion(updated, vLabel);
     return updated;
   });
