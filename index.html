@@ -400,6 +400,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .inp:focus{border-color:var(--lime)}
 textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 .inp-row{display:flex;gap:10px}
+.dur-hint{font-size:11px;color:var(--text-dim);margin-top:6px}
 .inp-row .inp{flex:1}
 .state-row{display:flex;gap:8px;margin-bottom:4px}
 .state-btn{flex:1;padding:10px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--bg-input);color:var(--text-sec);transition:all .18s;text-align:center}
@@ -767,11 +768,17 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <textarea class="inp" id="ev-body" placeholder="Details…" rows="3"></textarea>
     
     <div class="field-label">Date</div>
-    <input class="inp" id="ev-date" type="date">
+    <input class="inp" id="ev-date" type="date" oninput="evOnStartChange()">
     <div class="field-label">Time & Duration</div>
     <div class="inp-row">
-      <input class="inp" id="ev-time" type="time">
-      <input class="inp" id="ev-dur"  type="number" placeholder="Duration (min)" min="5">
+      <input class="inp" id="ev-time" type="time" oninput="evOnStartChange()">
+      <input class="inp" id="ev-dur"  type="number" placeholder="Duration (min)" min="5" oninput="evOnStartChange()">
+    </div>
+    <div class="dur-hint" id="ev-dur-hint"></div>
+    <div class="field-label">Ends</div>
+    <div class="inp-row">
+      <input class="inp" id="ev-end-date" type="date" oninput="evOnEndChange()">
+      <input class="inp" id="ev-end-time" type="time" oninput="evOnEndChange()">
     </div>
     <div class="field-label">Tag</div>
     <input class="inp" id="ev-tag" placeholder="#life #work #health…">
@@ -796,11 +803,17 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <input class="inp" id="sc-title" placeholder="Schedule title…">
     <div class="field-label">Date & Time</div>
     <div class="inp-row">
-      <input class="inp" id="sc-date" type="date">
-      <input class="inp" id="sc-time" type="time" value="09:00">
+      <input class="inp" id="sc-date" type="date" oninput="scOnStartChange()">
+      <input class="inp" id="sc-time" type="time" value="09:00" oninput="scOnStartChange()">
     </div>
     <div class="field-label">Duration (minutes)</div>
-    <input class="inp" id="sc-dur" type="number" placeholder="e.g. 60" min="5" value="60">
+    <input class="inp" id="sc-dur" type="number" placeholder="e.g. 60" min="5" value="60" oninput="scOnStartChange()">
+    <div class="dur-hint" id="sc-dur-hint"></div>
+    <div class="field-label">Ends</div>
+    <div class="inp-row">
+      <input class="inp" id="sc-end-date" type="date" oninput="scOnEndChange()">
+      <input class="inp" id="sc-end-time" type="time" oninput="scOnEndChange()">
+    </div>
     <div class="field-label">Notes</div>
     <textarea class="inp" id="sc-notes" placeholder="Optional notes…" rows="2"></textarea>
     <div class="field-label">Tags</div>
@@ -819,9 +832,12 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div class="field-label">Title</div>
     <input class="inp" id="rt-title" placeholder="e.g. Morning workout">
     <div class="field-label">Time</div>
-    <input class="inp" id="rt-time" type="time" value="07:00">
+    <input class="inp" id="rt-time" type="time" value="07:00" oninput="rtOnStartChange()">
     <div class="field-label">Duration (minutes)</div>
-    <input class="inp" id="rt-dur" type="number" value="30" min="5">
+    <input class="inp" id="rt-dur" type="number" value="30" min="5" oninput="rtOnStartChange()">
+    <div class="dur-hint" id="rt-dur-hint"></div>
+    <div class="field-label">Ends</div>
+    <input class="inp" id="rt-end-time" type="time" oninput="rtOnEndChange()">
     <div class="field-label">Tags</div>
     <input class="inp" id="rt-tag" placeholder="#life #work #health…">
     <div class="field-label">Repeat type</div>
@@ -1488,6 +1504,111 @@ function eventCalDate(e){
 function friendlyDate(s){const d=dsToDate(s);return DAYS_FULL[d.getDay()]+', '+MONTHS_FULL[d.getMonth()]+' '+d.getDate()}
 
 // ══════════════════════════════════════
+// END DATE/TIME ⇄ DURATION SYNC
+// (Event / Schedule sheets have a date; Routine is time-only since it recurs)
+// ══════════════════════════════════════
+function fmtDurLong(min){
+  min = +min || 0;
+  if(min <= 0) return '0m';
+  const d = Math.floor(min/1440);
+  const h = Math.floor((min%1440)/60);
+  const m = min%60;
+  const parts = [];
+  if(d) parts.push(d+'d');
+  if(h) parts.push(h+'h');
+  if(m || !parts.length) parts.push(m+'m');
+  return parts.join(' ');
+}
+function computeEndFromStart(dateStr, timeStr, dur){
+  if(!timeStr || dur==='' || dur==null || isNaN(dur)) return {endDate:dateStr||'', endTime:''};
+  const [h,m] = timeStr.split(':').map(Number);
+  const endTotal = h*60+m+(+dur);
+  const dayOffset = Math.floor(endTotal/1440);
+  const endMinOfDay = ((endTotal%1440)+1440)%1440;
+  let endDate = dateStr||'';
+  if(dateStr && dayOffset!==0){
+    const d = dsToDate(dateStr);
+    d.setDate(d.getDate()+dayOffset);
+    endDate = toDS(d);
+  }
+  return {endDate, endTime: p2(Math.floor(endMinOfDay/60))+':'+p2(endMinOfDay%60)};
+}
+function computeDurFromRange(startDate, startTime, endDate, endTime){
+  if(!startTime || !endTime) return '';
+  const [sh,sm] = startTime.split(':').map(Number);
+  const [eh,em] = endTime.split(':').map(Number);
+  let dayDiff = 0;
+  if(startDate && endDate) dayDiff = Math.round((dsToDate(endDate)-dsToDate(startDate))/86400000);
+  let dur = (eh*60+em+dayDiff*1440) - (sh*60+sm);
+  if(dur < 0) dur = 0;
+  return dur;
+}
+function computeEndTimeOnly(startTime, dur){
+  if(!startTime || dur==='' || dur==null || isNaN(dur)) return '';
+  const [h,m] = startTime.split(':').map(Number);
+  const total = ((h*60+m+(+dur))%1440+1440)%1440;
+  return p2(Math.floor(total/60))+':'+p2(total%60);
+}
+function computeDurFromTimesOnly(startTime, endTime){
+  if(!startTime || !endTime) return '';
+  const [sh,sm] = startTime.split(':').map(Number);
+  const [eh,em] = endTime.split(':').map(Number);
+  let dur = (eh*60+em) - (sh*60+sm);
+  if(dur < 0) dur += 1440; // crosses midnight
+  return dur;
+}
+
+function evOnStartChange(){
+  const date=document.getElementById('ev-date').value, time=document.getElementById('ev-time').value, dur=document.getElementById('ev-dur').value;
+  if(time && dur!==''){
+    const {endDate,endTime}=computeEndFromStart(date,time,+dur);
+    document.getElementById('ev-end-date').value=endDate;
+    document.getElementById('ev-end-time').value=endTime;
+  }
+  document.getElementById('ev-dur-hint').textContent = dur!=='' ? '= '+fmtDurLong(+dur) : '';
+}
+function evOnEndChange(){
+  const date=document.getElementById('ev-date').value, time=document.getElementById('ev-time').value;
+  const endDate=document.getElementById('ev-end-date').value||date, endTime=document.getElementById('ev-end-time').value;
+  if(time && endTime){
+    const dur=computeDurFromRange(date,time,endDate,endTime);
+    document.getElementById('ev-dur').value=dur;
+    document.getElementById('ev-dur-hint').textContent = '= '+fmtDurLong(dur);
+  }
+}
+function scOnStartChange(){
+  const date=document.getElementById('sc-date').value, time=document.getElementById('sc-time').value, dur=document.getElementById('sc-dur').value;
+  if(time && dur!==''){
+    const {endDate,endTime}=computeEndFromStart(date,time,+dur);
+    document.getElementById('sc-end-date').value=endDate;
+    document.getElementById('sc-end-time').value=endTime;
+  }
+  document.getElementById('sc-dur-hint').textContent = dur!=='' ? '= '+fmtDurLong(+dur) : '';
+}
+function scOnEndChange(){
+  const date=document.getElementById('sc-date').value, time=document.getElementById('sc-time').value;
+  const endDate=document.getElementById('sc-end-date').value||date, endTime=document.getElementById('sc-end-time').value;
+  if(time && endTime){
+    const dur=computeDurFromRange(date,time,endDate,endTime);
+    document.getElementById('sc-dur').value=dur;
+    document.getElementById('sc-dur-hint').textContent = '= '+fmtDurLong(dur);
+  }
+}
+function rtOnStartChange(){
+  const time=document.getElementById('rt-time').value, dur=document.getElementById('rt-dur').value;
+  if(time && dur!=='') document.getElementById('rt-end-time').value=computeEndTimeOnly(time,+dur);
+  document.getElementById('rt-dur-hint').textContent = dur!=='' ? '= '+fmtDurLong(+dur) : '';
+}
+function rtOnEndChange(){
+  const time=document.getElementById('rt-time').value, endTime=document.getElementById('rt-end-time').value;
+  if(time && endTime){
+    const dur=computeDurFromTimesOnly(time,endTime);
+    document.getElementById('rt-dur').value=dur;
+    document.getElementById('rt-dur-hint').textContent = '= '+fmtDurLong(dur);
+  }
+}
+
+// ══════════════════════════════════════
 // CONFLICT DETECTION
 // ══════════════════════════════════════
 function getAllSlotsOnDate(dateStr, excludeId=null){
@@ -1961,6 +2082,15 @@ function openEventSheet(id=null){
   document.getElementById('ev-conflict-box').innerHTML='';
   document.getElementById('ev-delete-btn').style.display=id?'block':'none';
   selectState(e ? (e.openState || 'open') : 'open');
+  document.getElementById('ev-end-date').value='';
+  document.getElementById('ev-end-time').value='';
+  document.getElementById('ev-dur-hint').textContent='';
+  if(e && e.date && e.time && e.dur!==''){
+    const {endDate,endTime}=computeEndFromStart(e.date,e.time,+e.dur);
+    document.getElementById('ev-end-date').value=endDate;
+    document.getElementById('ev-end-time').value=endTime;
+    document.getElementById('ev-dur-hint').textContent='= '+fmtDurLong(+e.dur);
+  }
   document.getElementById('event-overlay').classList.add('open');
   // focus removed - unreliable on mobile
 }
@@ -2013,6 +2143,7 @@ async function saveEvent(){
       document.getElementById('ev-date').value=ds;
       document.getElementById('ev-time').value=t;
       document.getElementById('ev-conflict-box').innerHTML='';
+      evOnStartChange();
     });
     return;
   }
@@ -2347,6 +2478,13 @@ function openScheduleSheet(id=null, isReschedule=false){
   document.getElementById('sc-tag').value=s?(s.tag||''):'';
   document.getElementById('sc-conflict-box').innerHTML='';
   document.getElementById('sc-delete-btn').style.display=id?'block':'none';
+  {
+    const scDate=document.getElementById('sc-date').value, scTime=document.getElementById('sc-time').value, scDur=document.getElementById('sc-dur').value;
+    const {endDate,endTime}=computeEndFromStart(scDate,scTime,+scDur);
+    document.getElementById('sc-end-date').value=endDate;
+    document.getElementById('sc-end-time').value=endTime;
+    document.getElementById('sc-dur-hint').textContent = scDur!=='' ? '= '+fmtDurLong(+scDur) : '';
+  }
   document.getElementById('sch-overlay').classList.add('open');
   // focus removed - unreliable on mobile
 }
@@ -2357,6 +2495,7 @@ function startReschedule(id, oldDate){
   document.getElementById('sc-date').value='';
   document.getElementById('sc-time').value='09:00';
   document.getElementById('sc-conflict-box').innerHTML=`<div style="font-size:12px;color:var(--text-dim);padding:6px 0">Pick a new date & time for this missed schedule.</div>`;
+  scOnStartChange();
 }
 
 async function saveSchedule(){
@@ -2378,6 +2517,7 @@ async function saveSchedule(){
       document.getElementById('sc-date').value=ds;
       document.getElementById('sc-time').value=t;
       document.getElementById('sc-conflict-box').innerHTML='';
+      scOnStartChange();
     });
     return;
   }
@@ -2835,6 +2975,11 @@ function openRoutineSheet(id=null){
   document.getElementById('rt-time').value  = r ? r.time  : '07:00';
   document.getElementById('rt-dur').value   = r ? r.dur   : '30';
   document.getElementById('rt-tag').value   = r ? (r.tag||'') : '';
+  {
+    const rtTime=document.getElementById('rt-time').value, rtDur=document.getElementById('rt-dur').value;
+    document.getElementById('rt-end-time').value = computeEndTimeOnly(rtTime, +rtDur);
+    document.getElementById('rt-dur-hint').textContent = rtDur!=='' ? '= '+fmtDurLong(+rtDur) : '';
+  }
   document.querySelectorAll('#rt-days-row .day-btn').forEach(b=>b.classList.remove('on'));
   if(r && r.repeatType === 'day' && r.days){
     r.days.forEach(d=>{
@@ -3269,7 +3414,8 @@ function openNoteDetail(id, source='event'){
 }
 
 function closeNoteDetail(){
-  // Flush any pending debounced version/render/save before we lose ndEventId
+  // Flush any pending debounced version/render work before we lose ndEventId,
+  // then upload the final result to Drive with a visible progress popup.
   clearTimeout(ndRenderTimer);
   ndFlushHeavyUpdate();
   const el = document.getElementById('note-detail');
@@ -3279,6 +3425,7 @@ function closeNoteDetail(){
   ndEventId = null;
   ndItemSource = 'event';
   renderAlertBanner();
+  showUploadToast('Saving your note');
 }
 
 function openVersionViewer(versionIndex, eventId){
@@ -3909,7 +4056,8 @@ async function ndAutoSave(){
     }));
   }
 
-  // Debounce the expensive stuff (version snapshot + full list re-render + Drive save)
+  // Debounce the expensive stuff (version snapshot + full list re-render).
+  // Drive upload itself is deferred until the note is closed (see closeNoteDetail).
   clearTimeout(ndRenderTimer);
   ndRenderTimer = setTimeout(ndFlushHeavyUpdate, 400);
 }
@@ -3918,8 +4066,6 @@ function ndFlushHeavyUpdate(){
   if(!ndEventId) return;
   if(ndItemSource === 'schedule' || ndItemSource === 'routine'){
     renderEvents();
-    clearTimeout(ndAutoSaveTimer);
-    ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
     return;
   }
   events = events.map(e => {
@@ -3932,8 +4078,6 @@ function ndFlushHeavyUpdate(){
     return updated;
   });
   renderEvents();
-  clearTimeout(ndAutoSaveTimer);
-  ndAutoSaveTimer = setTimeout(() => { driveSaveData(); }, 2000);
 }
 
 // ══════════════════════════════════════
