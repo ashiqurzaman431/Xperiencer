@@ -266,6 +266,8 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .ev-hcard .ev-icon svg{width:18px;height:18px;fill:none;stroke-width:1.8}
 .ev-hcard.dark .ev-icon svg{stroke:var(--lime)}
 .ev-hcard .ev-title{font-size:20px;font-weight:800;line-height:1.2;margin-bottom:12px;flex:0}
+.ev-hcard .ev-quote-mid{flex:1;display:flex;flex-direction:column;justify-content:center}
+.ev-hcard .ev-quote-mid .ev-title{margin-bottom:8px}
 .ev-hcard.dark .ev-title{color:var(--text-pri)}
 .ev-hcard .ev-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .ev-hcard .ev-tag{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px}
@@ -492,6 +494,22 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 /* Toast */
 .toast{position:fixed;bottom:calc(var(--nav-h) + var(--safe-b) + 14px);left:50%;transform:translateX(-50%) translateY(12px);background:var(--lime);color:#1a1410;padding:10px 20px;border-radius:30px;font-size:13px;font-weight:800;opacity:0;transition:all .25s var(--ease);white-space:nowrap;z-index:300;pointer-events:none;box-shadow:0 4px 20px var(--lime-glow)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.upload-toast{position:fixed;bottom:calc(var(--nav-h) + var(--safe-b) + 14px);left:50%;transform:translateX(-50%) translateY(12px);background:var(--bg-card2);border:1px solid var(--border);border-radius:18px;padding:14px 18px;display:flex;align-items:center;gap:12px;min-width:230px;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:all .3s var(--ease);z-index:301}
+.upload-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.upload-toast.done{background:var(--lime)}
+.upload-toast .spinner{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--lime-dim);border-top-color:var(--lime);animation:upload-spin .7s linear infinite;flex-shrink:0}
+@keyframes upload-spin{to{transform:rotate(360deg)}}
+.upload-toast .check-icon{width:22px;height:22px;border-radius:50%;background:#1a1410;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.upload-toast .check-icon svg{width:13px;height:13px;stroke:var(--lime);fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.upload-toast .upload-text-wrap{flex:1;min-width:0}
+.upload-toast .upload-title{font-size:13px;font-weight:800;color:var(--text-pri)}
+.upload-toast.done .upload-title{color:#1a1410}
+.upload-toast .upload-sub{font-size:11px;color:var(--text-dim);margin-top:2px}
+.upload-toast.done .upload-sub{color:rgba(26,20,16,.65)}
+.upload-toast .progress-track{height:3px;background:rgba(255,255,255,.08);border-radius:3px;margin-top:8px;overflow:hidden}
+.upload-toast .progress-fill{height:100%;width:0%;background:var(--lime);border-radius:3px;transition:width .25s linear}
+.upload-toast.done .progress-track{background:rgba(26,20,16,.15)}
+.upload-toast.done .progress-fill{background:#1a1410}
 
 /* Login screen */
 #login-screen{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 28px;background:radial-gradient(circle at 30% 20%,#2a2118 0%,var(--bg) 55%,#0f0c09 100%);text-align:center}
@@ -752,8 +770,8 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <input class="inp" id="ev-date" type="date">
     <div class="field-label">Time & Duration</div>
     <div class="inp-row">
-      <input class="inp" id="ev-time" type="time" value="09:00">
-      <input class="inp" id="ev-dur"  type="number" placeholder="Duration (min)" min="5" value="60">
+      <input class="inp" id="ev-time" type="time">
+      <input class="inp" id="ev-dur"  type="number" placeholder="Duration (min)" min="5">
     </div>
     <div class="field-label">Tag</div>
     <input class="inp" id="ev-tag" placeholder="#life #work #health…">
@@ -1006,6 +1024,14 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="upload-toast" id="upload-toast">
+  <div class="spinner" id="upload-toast-icon"></div>
+  <div class="upload-text-wrap">
+    <div class="upload-title" id="upload-toast-title">Uploading to Drive…</div>
+    <div class="upload-sub" id="upload-toast-sub">Saving your note</div>
+    <div class="progress-track"><div class="progress-fill" id="upload-toast-fill"></div></div>
+  </div>
+</div>
 
 <!-- ══ APP GALLERY ══ -->
 <div id="app-gallery" style="display:none;position:fixed;inset:0;z-index:500;background:#1a1410;flex-direction:column">
@@ -1073,6 +1099,7 @@ const MAX_DATA_FILES = 100;
 
 let driveAccessToken = null;
 let driveFolderId    = null;
+let driveDataFileId  = null;
 let driveTokenClient = null;
 
 // ══════════════════════════════════════
@@ -1097,6 +1124,9 @@ async function enterApp(){
       window.calendarArchive = data.calendarArchive || [];
       readyRoutines = data.readyRoutines || [];
     }
+    // Once-per-session timestamped backup + prune — fire-and-forget so it
+    // doesn't delay the UI from showing up.
+    driveSaveSnapshot();
   }
   checkDailyReset();
   schSelDate = todayStr();
@@ -1156,18 +1186,56 @@ async function driveInit(){
   }
 }
 
+const LIVE_FILE_NAME = 'Xperiencer Data.json';
+
 function driveFileName(){
   const n = new Date();
   const pad = x => String(x).padStart(2,'0');
   return `Xperiencer Data.${n.getFullYear()}.${pad(n.getMonth()+1)}.${pad(n.getDate())}.${pad(n.getHours())}.${pad(n.getMinutes())}.${pad(n.getSeconds())}.json`;
 }
 
+function driveBuildPayload(){
+  return JSON.stringify({ events, schedules, routines, completions, deletionLog, doneSchedules, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines });
+}
+
+// Fast path: overwrites the single live data file in place. Called on every
+// autosave — no new file, no listing, no pruning, so it stays quick even on
+// a slow connection.
 async function driveSaveData(){
   if(!driveAccessToken || !driveFolderId) return;
-  const payload = JSON.stringify({ events, schedules, routines, completions, deletionLog, doneSchedules, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines });
-  const fileName = driveFileName();
-  // Upload new data file
-  const meta = { name: fileName, parents: [driveFolderId] };
+  const payload = driveBuildPayload();
+
+  if(driveDataFileId){
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${driveDataFileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
+      body: payload
+    });
+    return;
+  }
+
+  // No live file yet (first save ever, or first save after migrating from
+  // the old timestamped-file format) — create it once and remember its id.
+  const meta = { name: LIVE_FILE_NAME, parents: [driveFolderId] };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
+  form.append('file', new Blob([payload], { type: 'application/json' }));
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + driveAccessToken },
+    body: form
+  });
+  const data = await res.json();
+  if(data && data.id) driveDataFileId = data.id;
+}
+
+// Backup path: writes a timestamped snapshot copy (old behavior) and prunes
+// old snapshots down to MAX_DATA_FILES. Runs once per app session (on load)
+// rather than after every autosave, since it's the expensive part.
+async function driveSaveSnapshot(){
+  if(!driveAccessToken || !driveFolderId) return;
+  const payload = driveBuildPayload();
+  const meta = { name: driveFileName(), parents: [driveFolderId] };
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify(meta)], { type: 'application/json' }));
   form.append('file', new Blob([payload], { type: 'application/json' }));
@@ -1176,13 +1244,12 @@ async function driveSaveData(){
     headers: { Authorization: 'Bearer ' + driveAccessToken },
     body: form
   });
-  // Prune: keep only latest 100 data files
   await drivePruneOldFiles();
 }
 
 async function drivePruneOldFiles(){
   const listRes = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name contains 'Xperiencer Data.' and mimeType='application/json' and trashed=false&orderBy=name desc&fields=files(id,name)&pageSize=200`,
+    `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name contains 'Xperiencer Data.' and name != '${LIVE_FILE_NAME}' and mimeType='application/json' and trashed=false&orderBy=name desc&fields=files(id,name)&pageSize=200`,
     { headers: { Authorization: 'Bearer ' + driveAccessToken } }
   );
   const listData = await listRes.json();
@@ -1201,6 +1268,25 @@ async function drivePruneOldFiles(){
 
 async function driveLoadLatestData(){
   if(!driveAccessToken || !driveFolderId) return null;
+
+  // Preferred path: the single live data file.
+  const liveRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name = '${LIVE_FILE_NAME}' and mimeType='application/json' and trashed=false&fields=files(id,name)&pageSize=1`,
+    { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+  );
+  const liveData = await liveRes.json();
+  if(liveData.files && liveData.files.length){
+    driveDataFileId = liveData.files[0].id;
+    const fileRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${driveDataFileId}?alt=media`,
+      { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+    );
+    return await fileRes.json();
+  }
+
+  // Migration fallback: no live file yet, but there may be older timestamped
+  // snapshot files from before this change — load the newest one. The next
+  // save will create the live file going forward.
   const listRes = await fetch(
     `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name contains 'Xperiencer Data.' and mimeType='application/json' and trashed=false&orderBy=name desc&fields=files(id,name)&pageSize=1`,
     { headers: { Authorization: 'Bearer ' + driveAccessToken } }
@@ -1719,20 +1805,27 @@ function renderEvents(){
     const bodyText = (!isQuote && e.body) ? e.body.replace(/<[^>]*>/g,'').trim() : '';
     const displayTitle = isQuote ? `\u201C${e.title||''}\u201D` : (e.title||'Untitled');
     const timeState = e._timeState;
-    return `<div class="ev-hcard ${skin}${hasCover?' has-cover':''}${coverSizeClass}" id="${idPrefix}${e.id}"${coverInlineStyle} onclick="${clickFn}">
-        <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[timeState]||actionIcons.future}</button>
-        <div class="ev-icon">${cardIcons[timeState]||cardIcons.future}</div>
-        ${typeBadge}
-        <div class="ev-title">${esc(displayTitle)}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px">
+    const badgesRow = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px">
           ${timeState?`<span class="state-badge ${timeState}">${{past:'Past',present:'Present',future:'Future'}[timeState]}</span>`:''}
           ${e._source==='event'?(isQuote
             ? `<span class="state-badge" style="background:rgba(245,200,66,.14);color:var(--amber);font-weight:800">Quote</span>`
             : `<span class="state-badge" style="background:${(e.openState||'open')==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${(e.openState||'open')==='closed'?'var(--red)':'var(--lime)'};font-weight:800">${(e.openState||'open')==='closed'?'Closed':'Open'}</span>`
           ):''}
-        </div>
+        </div>`;
+    const middleContent = isQuote
+      ? `<div class="ev-quote-mid">
+          <div class="ev-title">${esc(displayTitle)}</div>
+          ${badgesRow}
+        </div>`
+      : `<div class="ev-title">${esc(displayTitle)}</div>
+        ${badgesRow}
         ${tags.length?`<div class="ev-tags">${tags.map(t=>`<span class="ev-tag">${esc(t)}</span>`).join('')}</div>`:''}
-        ${bodyText?`<div class="ev-body">${esc(bodyText)}</div>`:'<div class="ev-body" style="flex:1"></div>'}
+        ${bodyText?`<div class="ev-body">${esc(bodyText)}</div>`:'<div class="ev-body" style="flex:1"></div>'}`;
+    return `<div class="ev-hcard ${skin}${hasCover?' has-cover':''}${coverSizeClass}${isQuote?' quote-card':''}" id="${idPrefix}${e.id}"${coverInlineStyle} onclick="${clickFn}">
+        <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[timeState]||actionIcons.future}</button>
+        <div class="ev-icon">${cardIcons[timeState]||cardIcons.future}</div>
+        ${typeBadge}
+        ${middleContent}
         <div class="ev-footer">
           <span class="ev-time-lbl">${timeLbl}</span>
           <div class="ev-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
@@ -1861,9 +1954,9 @@ function openEventSheet(id=null){
   document.getElementById('event-sheet-title').textContent=id?'Edit Event':'New Event';
   document.getElementById('ev-title').value=e?e.title:'';
   document.getElementById('ev-body').value=e?e.body:'';
-  document.getElementById('ev-date').value=e?e.date:todayStr();
-  document.getElementById('ev-time').value=e?e.time:'09:00';
-  document.getElementById('ev-dur').value=e?e.dur:60;
+  document.getElementById('ev-date').value=e?e.date:'';
+  document.getElementById('ev-time').value=e?e.time:'';
+  document.getElementById('ev-dur').value=e?e.dur:'';
   document.getElementById('ev-tag').value=e?e.tag:'';
   document.getElementById('ev-conflict-box').innerHTML='';
   document.getElementById('ev-delete-btn').style.display=id?'block':'none';
@@ -1900,7 +1993,7 @@ async function saveEvent(){
   if(!title){showToast('Enter a title');return;}
   const date=document.getElementById('ev-date').value;
   const time=document.getElementById('ev-time').value;
-  const dur=+document.getElementById('ev-dur').value||60;
+  const dur=document.getElementById('ev-dur').value===''?'':+document.getElementById('ev-dur').value;
   const timeState = calcTimeState(date);
   const now = new Date().toISOString();
   const existing = editingEv ? events.find(e=>e.id===editingEv) : null;
@@ -2934,10 +3027,48 @@ function showToast(msg){
   el.textContent=msg;el.classList.add('show');
   clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2400);
 }
+
+// Runs a Drive save with a visible progress popup: spinner + progress bar
+// while the save is in flight, then a checkmark once it's confirmed done.
+// Used for saves that happen on note close (rather than mid-typing), so the
+// person can see it actually synced.
+let uploadToastHideT;
+async function showUploadToast(label){
+  const toast = document.getElementById('upload-toast');
+  const iconWrap = document.getElementById('upload-toast-icon');
+  const title = document.getElementById('upload-toast-title');
+  const sub = document.getElementById('upload-toast-sub');
+  const fill = document.getElementById('upload-toast-fill');
+
+  clearTimeout(uploadToastHideT);
+  toast.classList.remove('done');
+  iconWrap.outerHTML = '<div class="spinner" id="upload-toast-icon"></div>';
+  title.textContent = 'Uploading to Drive…';
+  sub.textContent = label || 'Saving your changes';
+  fill.style.width = '0%';
+  toast.classList.add('show');
+  requestAnimationFrame(()=>{ fill.style.width = '90%'; });
+
+  try{
+    await driveSaveData();
+  } catch(e){
+    // fall through — still show completion so the popup doesn't hang forever
+  }
+
+  fill.style.width = '100%';
+  toast.classList.add('done');
+  document.getElementById('upload-toast-icon').outerHTML =
+    '<div class="check-icon" id="upload-toast-icon"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>';
+  document.getElementById('upload-toast-title').textContent = 'Saved';
+  document.getElementById('upload-toast-sub').textContent = 'All changes synced';
+
+  uploadToastHideT = setTimeout(()=>{ toast.classList.remove('show'); }, 1600);
+}
   
 function signOut(){
   driveAccessToken = null;
   driveFolderId    = null;
+  driveDataFileId  = null;
   events = []; schedules = []; routines = []; completions = {};
   localStorage.removeItem('ll_authMode');
   document.getElementById('app').style.display = 'none';
