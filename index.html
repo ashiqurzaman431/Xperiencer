@@ -4155,9 +4155,17 @@ async function confirmCrop(){
       renderEvents();
       showToast('Card cover cropped ✓');
     } else {
-      // Note cover crop (existing flow). The raw photo is uploaded to Drive
-      // as cover_<id>.jpg and loaded on demand — it is never embedded in
-      // the data JSON.
+      // Note cover crop. Fresh covers get their own raw file uploaded as
+      // cover_<id>.jpg. Gallery-shared covers (coverSharedFile already set)
+      // must NOT re-upload — the shared file already exists in Drive, and
+      // driveLoadCover always prefers coverSharedFile over the per-id file,
+      // so uploading here would just create a permanent orphaned duplicate
+      // that's never read back.
+      const currentItem = ndItemSource === 'schedule' ? schedules.find(x=>x.id===ndEventId)
+                         : ndItemSource === 'routine'  ? routines.find(x=>x.id===ndEventId)
+                         : events.find(x=>x.id===ndEventId);
+      const isSharedCover = !!(currentItem && currentItem.coverSharedFile);
+
       if(ndItemSource === 'schedule'){
         schedules = schedules.map(s => s.id === ndEventId
           ? Object.assign({}, s, {hasCover: true})
@@ -4184,7 +4192,9 @@ async function confirmCrop(){
       document.getElementById('nd-remove-cover-btn').style.display = 'block';
       document.getElementById('nd-cover-size-divider').style.display = 'block';
       document.getElementById('nd-cover-size-row').style.display = 'block';
-      await driveUploadCover(ndEventId, _cropRawDataUrl);
+      if(!isSharedCover){
+        await driveUploadCover(ndEventId, _cropRawDataUrl);
+      }
       await driveSaveData();
       renderEvents();
       showToast('Cover cropped ✓');
