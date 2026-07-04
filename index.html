@@ -289,6 +289,24 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .ev-state-dot.future{background:var(--amber)}
 .ev-state-dot.past{background:var(--text-dim)}
 
+/* ── Schedule/Routine card overlay states (Events tab only) ── */
+.ev-hcard.occ-alerting{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber),0 0 16px rgba(245,200,66,.35)}
+.ev-hcard.occ-ongoing{border-color:var(--lime);box-shadow:0 0 0 1px var(--lime),0 0 16px rgba(200,232,50,.35)}
+.ev-hcard.occ-missed{border-color:var(--red);box-shadow:0 0 0 1px var(--red),0 0 16px rgba(232,76,61,.35)}
+.state-badge.occ-alerting{background:rgba(245,200,66,.16);color:var(--amber)}
+.state-badge.occ-ongoing{background:rgba(200,232,50,.16);color:var(--lime)}
+.state-badge.occ-missed{background:var(--red-dim);color:var(--red)}
+.ev-hcard .ev-close-btn{margin-top:10px;width:100%;background:var(--red);border:none;border-radius:12px;padding:9px;font-size:12px;font-weight:800;color:#fff;cursor:pointer;font-family:inherit}
+.ev-hcard .ev-close-btn:active{transform:scale(.97)}
+
+/* ── Late-start conflict popup ── */
+.lc-popup-box{background:var(--bg-card2);border:1px solid var(--border);border-radius:16px;padding:16px}
+.lc-popup-title{font-size:13px;font-weight:800;color:var(--text-pri);margin-bottom:4px}
+.lc-popup-sub{font-size:12px;color:var(--text-dim);margin-bottom:14px;line-height:1.5}
+.lc-popup-btn{width:100%;border:none;border-radius:12px;padding:12px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;margin-bottom:10px}
+.lc-popup-btn.primary{background:var(--lime);color:#1a1410}
+.lc-popup-btn.secondary{background:var(--bg-input);color:var(--text-pri)}
+
 /* ── Tabs (inside view) ── */
 .tab-row{display:flex;gap:8px;margin-bottom:18px}
 .vtab{padding:8px 18px;border-radius:30px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:all .18s;letter-spacing:.03em}
@@ -442,10 +460,6 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 .sch-card-ongoing{border:2px solid var(--lime);box-shadow:0 0 0 3px rgba(200,232,50,.15)}
 .sch-resched-btn{background:none;border:1px solid #f87171;color:#f87171;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit}
 .sch-card-ongoing .sch-card-title{color:var(--lime)}
-#alert-banner{display:none;position:fixed;top:0;left:0;right:0;z-index:250;background:var(--lime);padding:12px 16px;align-items:center;justify-content:space-between;gap:10px;cursor:pointer}
-#alert-banner.show{display:flex}
-#alert-banner .ab-text{font-size:13px;font-weight:800;color:#1a1410}
-#alert-banner .ab-sub{font-size:11px;font-weight:600;color:#1a1410;opacity:.75}
 
 /* ══ Ready Routines ══ */
 .rr-overlay{position:fixed;inset:0;z-index:200;background:#1e1a14;display:none;flex-direction:column}
@@ -584,14 +598,6 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <button onclick="dismissInstall()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;color:var(--text-dim);cursor:pointer;font-family:inherit">✕</button>
   </div>
 </div>
-<div id="alert-banner" onclick="alertBannerTap()">
-  <div>
-    <div class="ab-text" id="ab-title"></div>
-    <div class="ab-sub" id="ab-sub"></div>
-  </div>
-  <div class="ab-sub">Tap to open</div>
-</div>
-
 <!-- ══ VIEW: EVENTS ══ -->
 <div class="view active" id="view-events" style="display:flex;flex-direction:column">
   <div class="topbar">
@@ -791,6 +797,19 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div id="ev-conflict-box"></div>
     <button class="sheet-btn" onclick="saveEvent()">Save Event</button>
     <button class="sheet-btn danger" id="ev-delete-btn" onclick="deleteEvent()" style="display:none">Delete Event</button>
+  </div>
+</div>
+
+<!-- ══ POPUP: LATE-START CONFLICT ══ -->
+<div class="overlay" id="lc-overlay" onclick="closeOverlay('lc-overlay',event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="lc-popup-box">
+      <div class="lc-popup-title" id="lc-popup-title">Not enough time</div>
+      <div class="lc-popup-sub" id="lc-popup-sub"></div>
+      <button class="lc-popup-btn primary" id="lc-popup-complete-btn" onclick="lcConfirmComplete()"></button>
+      <button class="lc-popup-btn secondary" onclick="lcConfirmReschedule()">Reschedule</button>
+    </div>
   </div>
 </div>
 
@@ -1136,6 +1155,7 @@ async function enterApp(){
       completions = data.completions || {};
       deletionLog = data.deletionLog || [];
       doneSchedules = data.doneSchedules || {};
+      adjustedDeadlines = data.adjustedDeadlines || {};
       lastResetDate = data.lastResetDate || '';
       window.calendarArchive = data.calendarArchive || [];
       readyRoutines = data.readyRoutines || [];
@@ -1211,7 +1231,7 @@ function driveFileName(){
 }
 
 function driveBuildPayload(){
-  return JSON.stringify({ events, schedules, routines, completions, deletionLog, doneSchedules, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines });
+  return JSON.stringify({ events, schedules, routines, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines });
 }
 
 // Fast path: overwrites the single live data file in place. Called on every
@@ -1431,6 +1451,7 @@ let schFilterScheduleOnly = false;
 let actionListIds = [];
 let readyRoutines = [];
 let doneSchedules = {};
+let adjustedDeadlines = {}; // keyed by `${sourceId}_${date}` -> adjusted duration (minutes) for that occurrence
 let lastResetDate = '';
 let schAutoScrollEnabled = true;
 let rtAutoScrollEnabled  = true;
@@ -1619,7 +1640,7 @@ function getAllSlotsOnDate(dateStr, excludeId=null){
   // routines that apply on this date
   const d=dsToDate(dateStr);
   routines.forEach(r=>{
-    if(routineAppliesOn(r,dateStr)){
+    if(r.id!==excludeId && routineAppliesOn(r,dateStr)){
       slots.push({start:timeToMin(r.time),end:timeToMin(r.time)+(+r.dur||30)});
     }
   });
@@ -1905,10 +1926,16 @@ function renderEvents(){
       return e.date+(e.time?' · '+fmtTime(e.time):'');
     })():'';
     const clickFn = e._source==='schedule'
-      ? `openNoteDetail('${e.id}','schedule')`
+      ? `handleSchRtTap('${e.id}','schedule')`
       : e._source==='routine'
-        ? `openNoteDetail('${e.id}','routine')`
+        ? `handleSchRtTap('${e.id}','routine')`
         : `openNoteDetail('${e.id}')`;
+    const overlay = isSchRt ? getCardOverlayState(e) : null;
+    const overlayClass = overlay ? ` occ-${overlay.state}` : '';
+    const overlayBadgeLbl = overlay ? {alerting:'Starting soon', ongoing:'In progress', missed:'Missed'}[overlay.state] : '';
+    const closeBtn = (overlay && overlay.state==='missed')
+      ? `<button class="ev-close-btn" onclick="event.stopPropagation();closeSchRtCard('${e.id}','${e._source}','${overlay.occDate}')">Close</button>`
+      : '';
     const typeBadge = e._source==='schedule'
       ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(200,232,50,.14);color:var(--lime);letter-spacing:.05em">SCHEDULE</span>`
       : e._source==='routine'
@@ -1928,6 +1955,7 @@ function renderEvents(){
     const timeState = e._timeState;
     const badgesRow = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:2px">
           ${timeState?`<span class="state-badge ${timeState}">${{past:'Past',present:'Present',future:'Future'}[timeState]}</span>`:''}
+          ${overlay?`<span class="state-badge occ-${overlay.state}">${overlayBadgeLbl}</span>`:''}
           ${e._source==='event'?(isQuote
             ? `<span class="state-badge" style="background:rgba(245,200,66,.14);color:var(--amber);font-weight:800">Quote</span>`
             : `<span class="state-badge" style="background:${(e.openState||'open')==='closed'?'var(--red-dim)':'var(--green-dim)'};color:${(e.openState||'open')==='closed'?'var(--red)':'var(--lime)'};font-weight:800">${(e.openState||'open')==='closed'?'Closed':'Open'}</span>`
@@ -1942,7 +1970,7 @@ function renderEvents(){
         ${badgesRow}
         ${tags.length?`<div class="ev-tags">${tags.map(t=>`<span class="ev-tag">${esc(t)}</span>`).join('')}</div>`:''}
         ${bodyText?`<div class="ev-body">${esc(bodyText)}</div>`:'<div class="ev-body" style="flex:1"></div>'}`;
-    return `<div class="ev-hcard ${skin}${hasCover?' has-cover':''}${coverSizeClass}${isQuote?' quote-card':''}" id="${idPrefix}${e.id}"${coverInlineStyle} onclick="${clickFn}">
+    return `<div class="ev-hcard ${skin}${hasCover?' has-cover':''}${coverSizeClass}${isQuote?' quote-card':''}${overlayClass}" id="${idPrefix}${e.id}"${coverInlineStyle} onclick="${clickFn}">
         <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[timeState]||actionIcons.future}</button>
         <div class="ev-icon">${cardIcons[timeState]||cardIcons.future}</div>
         ${typeBadge}
@@ -1951,6 +1979,7 @@ function renderEvents(){
           <span class="ev-time-lbl">${timeLbl}</span>
           <div class="ev-arrow"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
         </div>
+        ${closeBtn}
       </div>`;
   }
 
@@ -2531,6 +2560,7 @@ async function saveSchedule(){
 
   if(reschedulingSc && reschedulingSc.id===editingSc){
     doneSchedules[reschedulingSc.id+'_'+reschedulingSc.oldDate]=true;
+    delete adjustedDeadlines[reschedulingSc.id+'_'+reschedulingSc.oldDate];
     reschedulingSc=null;
     showToast('Rescheduled — previous occurrence marked done');
   } else {
@@ -2819,6 +2849,11 @@ function checkDailyReset(){
     const dateStr = parts[parts.length - 1];
     if(dateStr && dateStr < cutoffStr) delete completions[key];
   });
+  Object.keys(adjustedDeadlines).forEach(key => {
+    const parts = key.split('_');
+    const dateStr = parts[parts.length - 1];
+    if(dateStr && dateStr < cutoffStr) delete adjustedDeadlines[key];
+  });
   const archiveCutoff = new Date();
   archiveCutoff.setDate(archiveCutoff.getDate() - 90);
   const archiveCutoffStr = toDS(archiveCutoff);
@@ -2843,59 +2878,162 @@ function computeOccState(time, dur, ds, storeVal){
   return 'pending';
 }
 
-let alertBannerItem=null;
+// ══════════════════════════════════════
+// SCHEDULE/ROUTINE CARD OVERLAY (Events tab only)
+// ══════════════════════════════════════
+
+// Resolves the concrete occurrence date for a schedule/routine card, or null
+// if it has no relevant occurrence "today" (e.g. a routine shown in All List
+// that doesn't apply today — it's just a definition, no time-state applies).
+function resolveOccDate(source, id){
+  if(source==='schedule'){
+    const s = schedules.find(x=>x.id===id);
+    return s ? s.date : null;
+  }
+  if(source==='routine'){
+    const r = routines.find(x=>x.id===id);
+    const today = todayStr();
+    return (r && routineAppliesOn(r, today)) ? today : null;
+  }
+  return null;
+}
+
+// Computes the overlay state {state, occDate, key} for a schedule/routine
+// card, or null if no overlay should show (event cards, undated routines,
+// items already fully done, or items with no active time-state).
+function getCardOverlayState(e){
+  if(e._source!=='schedule' && e._source!=='routine') return null;
+  const occDate = e.date || resolveOccDate(e._source, e.id);
+  if(!occDate || !e.time) return null;
+  const key = e.id+'_'+occDate;
+  const store = e._source==='routine' ? completions[key] : doneSchedules[key];
+  if(store===true) return null;
+  const dur = adjustedDeadlines[key] || e.dur;
+  const state = computeOccState(e.time, dur, occDate, store);
+  if(state!=='alerting' && state!=='ongoing' && state!=='missed') return null;
+  return {state, occDate, key};
+}
+
+function nowTimeMin(){
+  const n=new Date();
+  return n.getHours()*60+n.getMinutes();
+}
+
+// Called when a schedule/routine card is tapped in the Events tab. Marks the
+// item ongoing, checking for a late-start conflict with the next item first.
+function handleSchRtTap(id, source){
+  const occDate = resolveOccDate(source, id);
+  if(!occDate){ openNoteDetail(id, source); return; }
+  const item = source==='schedule' ? schedules.find(x=>x.id===id) : routines.find(x=>x.id===id);
+  if(!item || !item.time){ openNoteDetail(id, source); return; }
+  const key = id+'_'+occDate;
+  const store = source==='schedule' ? doneSchedules[key] : completions[key];
+
+  if(store===true || store==='ongoing' || store==='missed'){
+    // Already actioned this occurrence — just view it, no re-trigger.
+    openNoteDetail(id, source);
+    return;
+  }
+
+  const startMin = timeToMin(item.time);
+  const nowMin = nowTimeMin();
+  const isLate = nowMin > startMin;
+
+  if(isLate){
+    const dur = item.dur||30;
+    const slots = getAllSlotsOnDate(occDate, id);
+    const nextStart = slots.map(s=>s.start).filter(st=>st>nowMin).sort((a,b)=>a-b)[0];
+    if(nextStart!==undefined && startMin+dur>nextStart){
+      const avail = nextStart-nowMin;
+      if(avail<dur){
+        showLateConflictPopup(id, source, occDate, avail);
+        return;
+      }
+    }
+  }
+
+  if(source==='schedule') doneSchedules[key]='ongoing';
+  else completions[key]='ongoing';
+  driveSaveData();
+  runAlertCheck();
+  renderEvents();
+  openNoteDetail(id, source);
+}
+
+// Marks a schedule/routine occurrence done, hides it from the Action List,
+// and clears any adjusted deadline it had.
+function closeSchRtCard(id, source, occDate){
+  const key = id+'_'+occDate;
+  if(source==='schedule') doneSchedules[key] = true;
+  else completions[key] = true;
+  delete adjustedDeadlines[key];
+  driveSaveData();
+  renderEvents();
+  runAlertCheck();
+  showToast('Marked done');
+}
+
+let lcPending = null; // {id, source, occDate, avail}
+
+function showLateConflictPopup(id, source, occDate, avail){
+  lcPending = {id, source, occDate, avail};
+  document.getElementById('lc-popup-sub').textContent =
+    `This runs into your next item. Only ${avail} min free before it starts.`;
+  document.getElementById('lc-popup-complete-btn').textContent = `Complete in ${avail} min`;
+  document.getElementById('lc-overlay').classList.add('open');
+}
+
+function lcConfirmComplete(){
+  if(!lcPending) return;
+  const {id, source, occDate, avail} = lcPending;
+  const key = id+'_'+occDate;
+  adjustedDeadlines[key] = Math.max(avail,1);
+  if(source==='schedule') doneSchedules[key]='ongoing';
+  else completions[key]='ongoing';
+  document.getElementById('lc-overlay').classList.remove('open');
+  driveSaveData();
+  runAlertCheck();
+  renderEvents();
+  openNoteDetail(id, source);
+  lcPending = null;
+}
+
+function lcConfirmReschedule(){
+  if(!lcPending) return;
+  const {id, source} = lcPending;
+  document.getElementById('lc-overlay').classList.remove('open');
+  lcPending = null;
+  if(source==='schedule') openScheduleSheet(id);
+  else openRoutineSheet(id);
+}
 
 function runAlertCheck(){
   const today=todayStr();
-  let bannerCandidates=[];
 
   schedules.filter(s=>s.date===today).forEach(s=>{
     const key=s.id+'_'+today;
-    const state=computeOccState(s.time,s.dur,today,doneSchedules[key]);
+    const dur = adjustedDeadlines[key] || s.dur;
+    const state=computeOccState(s.time,dur,today,doneSchedules[key]);
     if(state==='missed' && doneSchedules[key]!=='missed'){
       doneSchedules[key]='missed';
       archiveItem({id:s.id,title:s.title,date:today,time:s.time,dur:s.dur,notes:s.notes||'',_type:'schedule',status:'missed'});
       driveSaveData();
     }
-    if(state==='alerting'||state==='ongoing') bannerCandidates.push({type:'schedule',id:s.id,title:s.title,state});
   });
 
   routines.filter(r=>routineAppliesOn(r,today)).forEach(r=>{
     const key=r.id+'_'+today;
-    const state=computeOccState(r.time,r.dur,today,completions[key]);
+    const dur = adjustedDeadlines[key] || r.dur;
+    const state=computeOccState(r.time,dur,today,completions[key]);
     if(state==='missed' && completions[key]!=='missed'){
       completions[key]='missed';
       driveSaveData();
     }
-    if(state==='alerting'||state==='ongoing') bannerCandidates.push({type:'routine',id:r.id,title:r.title,state});
   });
 
-  // ongoing takes priority over alerting; with no time conflicts allowed, there should only ever be one candidate
-  bannerCandidates.sort((a,b)=> (a.state==='ongoing'?0:1) - (b.state==='ongoing'?0:1));
-  alertBannerItem = bannerCandidates[0] || null;
-  renderAlertBanner();
-
+  if(document.getElementById('view-events').classList.contains('active')) renderEvents();
   if(document.getElementById('view-schedule').classList.contains('active')) renderSchedule();
   if(document.getElementById('view-routine').classList.contains('active')) renderRoutine();
-}
-
-function renderAlertBanner(){
-  const el=document.getElementById('alert-banner');
-  const noteOpen = document.getElementById('note-detail').classList.contains('open');
-  if(!alertBannerItem || noteOpen){ el.classList.remove('show'); return; }
-  document.getElementById('ab-title').textContent=alertBannerItem.title;
-  document.getElementById('ab-sub').textContent = alertBannerItem.state==='ongoing' ? 'Ongoing now' : 'Starting soon';
-  el.classList.add('show');
-}
-
-function alertBannerTap(){
-  if(!alertBannerItem) return;
-  const {type,id}=alertBannerItem;
-  const key=id+'_'+todayStr();
-  if(type==='schedule'){ doneSchedules[key]='ongoing'; openScheduleSheet(id); }
-  else { completions[key]='ongoing'; openRoutineSheet(id); }
-  driveSaveData();
-  runAlertCheck();
 }
 
 function archiveItem(item){
@@ -3238,6 +3376,7 @@ function reconnectGoogle(){
         completions = data.completions || {};
         deletionLog = data.deletionLog || [];
         doneSchedules = data.doneSchedules || {};
+        adjustedDeadlines = data.adjustedDeadlines || {};
         lastResetDate = data.lastResetDate || '';
         window.calendarArchive = data.calendarArchive || [];
         readyRoutines = data.readyRoutines || [];
@@ -3410,7 +3549,6 @@ function openNoteDetail(id, source='event'){
     histEl.innerHTML = '';
   }
   document.getElementById('note-detail').classList.add('open');
-  renderAlertBanner();
 }
 
 function closeNoteDetail(){
@@ -3424,7 +3562,6 @@ function closeNoteDetail(){
   document.getElementById('nd-dropdown').classList.remove('open');
   ndEventId = null;
   ndItemSource = 'event';
-  renderAlertBanner();
   showUploadToast('Saving your note');
 }
 
