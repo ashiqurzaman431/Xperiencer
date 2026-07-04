@@ -4704,10 +4704,12 @@ async function openAppGallery(){
       { headers: { Authorization: 'Bearer ' + driveAccessToken } }
     );
     const listData = await listRes.json();
-    coverFiles = (listData.files || []).filter(f => !f.name.startsWith('card_cover_'));
+    coverFiles = (listData.files || []).filter(f => !f.name.startsWith('cardcover_'));
   } else {
-    // Guest mode: collect from coverCache (raw images in memory)
-    coverFiles = events.filter(e=>e.hasCover && coverCache[e.id]).map(e=>({id:e.id, name:'cover_'+e.id+'.jpg', _local:true}));
+    // Guest mode: collect from coverCache (raw images in memory) — across
+    // events, schedules, and routines, not just events.
+    const guestSrc = [...events, ...schedules, ...routines];
+    coverFiles = guestSrc.filter(e=>e.hasCover && coverCache[e.id]).map(e=>({id:e.id, name:'cover_'+e.id+'.jpg', _local:true}));
   }
 
   if(!coverFiles.length){
@@ -4764,20 +4766,42 @@ async function selectGalleryImage(fileId, fileName, isLocal){
   }
   closeAppGallery();
 
-  // Mark event as having a cover with this shared image (no new upload needed)
-  events = events.map(ev => ev.id === ndEventId
-    ? Object.assign({}, ev, {
-        hasCover: true,
-        coverSize: 'md',
-        coverSharedFile: fileName  // reference to the shared Drive file
-      })
-    : ev
-  );
+  // Mark the currently-open item (event, schedule, or routine) as having a
+  // cover with this shared image — mirrors the branching used everywhere
+  // else covers are set/removed (see ndRemoveCover, crop-confirm handler).
+  if(ndItemSource === 'schedule'){
+    schedules = schedules.map(s => s.id === ndEventId
+      ? Object.assign({}, s, { hasCover: true, coverSharedFile: fileName })
+      : s
+    );
+  } else if(ndItemSource === 'routine'){
+    routines = routines.map(r => r.id === ndEventId
+      ? Object.assign({}, r, { hasCover: true, coverSharedFile: fileName })
+      : r
+    );
+  } else {
+    events = events.map(ev => ev.id === ndEventId
+      ? Object.assign({}, ev, {
+          hasCover: true,
+          coverSize: 'md',
+          coverSharedFile: fileName  // reference to the shared Drive file
+        })
+      : ev
+    );
+  }
   coverCache[ndEventId] = dataUrl;
   document.getElementById('nd-cover-size-divider').style.display = 'block';
   document.getElementById('nd-cover-size-row').style.display = 'block';
   document.getElementById('nd-remove-cover-btn').style.display = 'block';
-  // Open crop modal so user can crop for this event's note cover
+  // Persist immediately — don't rely on the user completing the crop step
+  // to save, since backing out of the crop modal should not silently lose
+  // the gallery selection.
+  await driveSaveData();
+  renderEvents();
+  if(typeof renderSchedule === 'function') renderSchedule();
+  if(typeof renderRoutine === 'function') renderRoutine();
+  showToast('Cover set from gallery ✓');
+  // Open crop modal so user can crop for this note's cover
   openCropModal('note');
 }
 
