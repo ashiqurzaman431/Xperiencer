@@ -1206,7 +1206,7 @@ function getAuthMode(){ return localStorage.getItem('ll_authMode'); }
 async function enterApp(){
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').style.display='flex';
-  if(driveAccessToken){
+  if(firebaseUid){
     showToast('Loading your data…');
     const data = await driveLoadLatestData();
     if(data){
@@ -1276,7 +1276,11 @@ async function loginWithGoogle(){
   localStorage.setItem('ll_authMode','google');
   showToast('Signed in!');
   await enterApp();
-  tryBackgroundDriveMigration();
+  // Background Drive migration is no longer auto-triggered — it relied on
+  // a silent popup that browsers block anyway, and RTDB is now the
+  // confirmed working source of truth. tryBackgroundDriveMigration() is
+  // still defined below if a manual "restore from old Drive backup"
+  // button is ever wanted later.
 }
 
 // Best-effort, non-blocking: after Firebase Auth confirms identity, try a
@@ -4633,7 +4637,6 @@ if(getAuthMode() === 'google'){
       if(user){
         firebaseUid = user.uid;
         await enterApp();
-        tryBackgroundDriveMigration();
       } else {
         // Firebase says no session (e.g. signed out elsewhere, or token
         // expired) — send back to the login screen rather than showing an
