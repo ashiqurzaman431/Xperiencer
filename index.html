@@ -18,8 +18,15 @@
   // Firebase SDK — loaded via CDN (no build step / bundler needed, matches
   // the rest of this single-file app). Exposes what we need on window so
   // the classic <script> block below (non-module) can call it directly.
+  //
+  // NOTE: type="module" scripts are always deferred — they execute after
+  // the HTML is parsed, which is LATER than classic inline <script> blocks
+  // elsewhere in this file. Anything outside this module that calls
+  // window.firebase* must wait for window.firebaseReady to be true first
+  // (see waitForFirebase() in the main script block) or it'll fail with
+  // "is not a function".
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getDatabase, ref, set, get }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
@@ -40,7 +47,11 @@
   const fbGoogleProvider = new GoogleAuthProvider();
 
   // Exposed for the classic script block further down this file.
-  window.firebaseSignIn = () => signInWithPopup(fbAuth, fbGoogleProvider);
+  // Redirect instead of popup — popups get blocked on mobile browsers and
+  // installed PWAs; redirect navigates away and back instead, which always
+  // works. onAuthStateChanged below fires with the signed-in user
+  // automatically once the redirect completes and the page reloads.
+  window.firebaseSignIn = () => signInWithRedirect(fbAuth, fbGoogleProvider);
   window.firebaseSignOut = () => signOut(fbAuth);
   window.firebaseOnAuthStateChanged = (cb) => onAuthStateChanged(fbAuth, cb);
   window.firebaseSaveUserData = (uid, data) => set(ref(fbDb, 'users/' + uid + '/data'), data);
@@ -48,6 +59,11 @@
     const snap = await get(ref(fbDb, 'users/' + uid + '/data'));
     return snap.exists() ? snap.val() : null;
   };
+  // Signals that everything above is now defined and safe to call — this
+  // module block executes AFTER classic inline <script> blocks elsewhere
+  // in the file (module scripts are always deferred), so any code calling
+  // window.firebase* must check this flag first via waitForFirebase().
+  window.firebaseReady = true;
 </script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1233,33 +1249,63 @@ function loginAsGuest(){
 // signed out or in guest mode.
 let firebaseUid = null;
 
+// Polls until the Firebase module script (deferred, loads after this
+// classic script block) has finished defining window.firebase* functions.
+// Needed because module scripts execute later than classic inline scripts
+// regardless of their position in the file.
+function waitForFirebase(cb){
+  if(window.firebaseReady){ cb(); return; }
+  setTimeout(()=>waitForFirebase(cb), 50);
+}
+
 function loginWithGoogle(){
-  driveTokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
-    scope: DRIVE_SCOPES,
-    callback: async (tokenResponse) => {
-      if(tokenResponse.error){ showToast('Sign-in failed: ' + tokenResponse.error); return; }
-      driveAccessToken = tokenResponse.access_token;
+  // Set BEFORE navigating away — signInWithRedirect leaves the page and
+  // comes back on a fresh load, so the boot-time check for this needs it
+  // already set when the page reloads after redirect.
+  localStorage.setItem('ll_authMode','google');
+  waitForFirebase(()=>{ window.firebaseSignIn(); });
+}
 
-      // Confirm identity through Firebase Auth. Drive access (above) and
-      // Firebase identity are separate grants — if this step fails, Drive
-      // still works but there is no uid, so RTDB data can't be saved/loaded
-      // yet. Surface that clearly instead of silently limping along.
-      try{
-        const cred = await window.firebaseSignIn();
-        firebaseUid = cred.user.uid;
-      } catch(err){
-        showToast('Drive connected, but account sign-in failed — data sync may not work.');
-        console.warn('Firebase sign-in failed:', err);
+// Best-effort, non-blocking: after Firebase Auth confirms identity, try a
+// silent (no popup/prompt) Drive token grant purely to enable the one-time
+// Drive→RTDB migration in driveLoadLatestData(). If this fails or is
+// declined, nothing breaks — it just means an existing user's old Drive
+// data won't auto-migrate until they explicitly reconnect. New data always
+// flows through RTDB regardless.
+function tryBackgroundDriveMigration(){
+  if(typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2){
+    setTimeout(tryBackgroundDriveMigration, 150);
+    return;
+  }
+  try{
+    const silentClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: DRIVE_SCOPES,
+      callback: async (tokenResponse) => {
+        if(tokenResponse.error) return; // silent failure is fine, not user-facing
+        driveAccessToken = tokenResponse.access_token;
+        await driveInit();
+        const data = await driveLoadLatestData();
+        if(data && (!events.length && !schedules.length && !routines.length)){
+          events      = data.events      || [];
+          schedules   = data.schedules   || [];
+          routines    = data.routines    || [];
+          completions = data.completions || {};
+          deletionLog = data.deletionLog || [];
+          doneSchedules = data.doneSchedules || {};
+          adjustedDeadlines = data.adjustedDeadlines || {};
+          lastResetDate = data.lastResetDate || '';
+          window.calendarArchive = data.calendarArchive || [];
+          readyRoutines = data.readyRoutines || [];
+          await migrateLegacyBloat();
+          renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView();
+        }
       }
-
-      localStorage.setItem('ll_authMode','google');
-      showToast('Signed in!');
-      await driveInit();
-      enterApp();
-    }
-  });
-  driveTokenClient.requestAccessToken();
+    });
+    silentClient.requestAccessToken({ prompt: '' });
+  }catch(err){
+    console.warn('Background Drive migration attempt failed:', err);
+  }
 }
 
 // ══════════════════════════════════════
@@ -3335,7 +3381,7 @@ async function showUploadToast(label){
 }
   
 function signOut(){
-  window.firebaseSignOut().catch(()=>{});
+  if(window.firebaseReady) window.firebaseSignOut().catch(()=>{});
   driveAccessToken = null;
   driveFolderId    = null;
   driveDataFileId  = null;
@@ -4569,18 +4615,21 @@ async function selectGalleryImage(coverUrl){
 if(getAuthMode() === 'google'){
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').style.display = 'flex';
-  window.firebaseOnAuthStateChanged(async (user) => {
-    if(user){
-      firebaseUid = user.uid;
-      await enterApp();
-    } else {
-      // Firebase says no session (e.g. signed out elsewhere, or token
-      // expired) — send back to the login screen rather than showing an
-      // empty app.
-      document.getElementById('app').style.display = 'none';
-      document.getElementById('login-screen').classList.remove('hidden');
-      localStorage.removeItem('ll_authMode');
-    }
+  waitForFirebase(()=>{
+    window.firebaseOnAuthStateChanged(async (user) => {
+      if(user){
+        firebaseUid = user.uid;
+        await enterApp();
+        tryBackgroundDriveMigration();
+      } else {
+        // Firebase says no session (e.g. signed out elsewhere, or token
+        // expired) — send back to the login screen rather than showing an
+        // empty app.
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('login-screen').classList.remove('hidden');
+        localStorage.removeItem('ll_authMode');
+      }
+    });
   });
 } else if(getAuthMode() === 'guest'){
   document.getElementById('login-screen').classList.add('hidden');
