@@ -673,6 +673,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
         <div style="font-size:12px;color:var(--text-sec);display:flex;align-items:center;gap:8px">
           Xperiencer
           <button onclick="signOut()" style="background:none;border:none;font-size:10px;color:var(--text-dim);cursor:pointer;padding:0;font-family:inherit;font-weight:700">Sign out</button>
+          <button onclick="restoreFromDriveBackup()" style="background:none;border:none;font-size:10px;color:var(--amber);cursor:pointer;padding:0;font-family:inherit;font-weight:700">Restore from Drive</button>
         </div>
         <div style="font-size:22px;font-weight:800;color:var(--text-pri)">Events</div>
       </div>
@@ -1453,7 +1454,74 @@ async function driveLoadLatestData(){
   return null;
 }
 
-// Cover image Drive functions
+// Manual, click-triggered recovery: pulls the old Xperiencer Data.json
+// straight from Drive and overwrites current RTDB state with it. Called
+// directly from a button tap (not from inside another async callback) so
+// the Drive OAuth popup isn't blocked the way the old silent background
+// attempt was.
+async function restoreFromDriveBackup(){
+  if(!confirm('This will REPLACE your current data with whatever is saved in your old Google Drive backup. Continue?')) return;
+  driveTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GOOGLE_CLIENT_ID,
+    scope: DRIVE_SCOPES,
+    callback: async (tokenResponse) => {
+      if(tokenResponse.error){ showToast('Drive connection failed: ' + tokenResponse.error); return; }
+      driveAccessToken = tokenResponse.access_token;
+      showToast('Searching Drive for your backup…');
+      try{
+        const searchRes = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
+          { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+        );
+        const searchData = await searchRes.json();
+        if(!searchData.files || !searchData.files.length){
+          showToast('No Drive backup folder found');
+          return;
+        }
+        driveFolderId = searchData.files[0].id;
+        const liveRes = await fetch(
+          `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name = '${LIVE_FILE_NAME}' and mimeType='application/json' and trashed=false&fields=files(id,name)&pageSize=1`,
+          { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+        );
+        const liveData = await liveRes.json();
+        if(!liveData.files || !liveData.files.length){
+          showToast('No backup file found in Drive');
+          return;
+        }
+        const fileRes = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${liveData.files[0].id}?alt=media`,
+          { headers: { Authorization: 'Bearer ' + driveAccessToken } }
+        );
+        const data = await fileRes.json();
+        if(!data){ showToast('Backup file was empty'); return; }
+
+        events      = data.events      || [];
+        schedules   = data.schedules   || [];
+        routines    = data.routines    || [];
+        completions = data.completions || {};
+        deletionLog = data.deletionLog || [];
+        doneSchedules = data.doneSchedules || {};
+        adjustedDeadlines = data.adjustedDeadlines || {};
+        lastResetDate = data.lastResetDate || '';
+        window.calendarArchive = data.calendarArchive || [];
+        readyRoutines = data.readyRoutines || [];
+
+        await migrateLegacyBloat();
+        const saved = await driveSaveData();
+        if(saved){
+          showToast(`Restored ✓ (${events.length} events, ${schedules.length} schedules, ${routines.length} routines)`);
+        } else {
+          showToast('Restored locally, but saving to RTDB failed — try again');
+        }
+        renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView();
+      } catch(err){
+        showToast('Restore failed — check console');
+        console.error('Drive restore failed:', err);
+      }
+    }
+  });
+  driveTokenClient.requestAccessToken();
+}
 // ── Cloudinary (unsigned upload) — replaces Drive for cover images ──
 // Deletion isn't available client-side (Cloudinary requires a signed
 // request with the API secret for deletes, which can never live in
