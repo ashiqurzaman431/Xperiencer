@@ -14,6 +14,41 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://apis.google.com/js/api.js" async defer></script>
+<script type="module">
+  // Firebase SDK — loaded via CDN (no build step / bundler needed, matches
+  // the rest of this single-file app). Exposes what we need on window so
+  // the classic <script> block below (non-module) can call it directly.
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getDatabase, ref, set, get }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCdae5l2uk9LsqeF3oCelvmG_vZh65wXaE",
+    authDomain: "xperiencer-app.firebaseapp.com",
+    databaseURL: "https://xperiencer-app-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "xperiencer-app",
+    storageBucket: "xperiencer-app.firebasestorage.app",
+    messagingSenderId: "322002878473",
+    appId: "1:322002878473:web:8f357a898c0340eacf38d8"
+  };
+
+  const fbApp  = initializeApp(firebaseConfig);
+  const fbAuth = getAuth(fbApp);
+  const fbDb   = getDatabase(fbApp);
+  const fbGoogleProvider = new GoogleAuthProvider();
+
+  // Exposed for the classic script block further down this file.
+  window.firebaseSignIn = () => signInWithPopup(fbAuth, fbGoogleProvider);
+  window.firebaseSignOut = () => signOut(fbAuth);
+  window.firebaseOnAuthStateChanged = (cb) => onAuthStateChanged(fbAuth, cb);
+  window.firebaseSaveUserData = (uid, data) => set(ref(fbDb, 'users/' + uid + '/data'), data);
+  window.firebaseLoadUserData = async (uid) => {
+    const snap = await get(ref(fbDb, 'users/' + uid + '/data'));
+    return snap.exists() ? snap.val() : null;
+  };
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
