@@ -6,14 +6,12 @@ const PRECACHE = [
   './icon-192.png',
   './icon-512.png'
 ];
-
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => cache.addAll(PRECACHE))
   );
   self.skipWaiting();
 });
-
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -22,11 +20,19 @@ self.addEventListener('activate', event => {
   );
   self.clients.claim();
 });
-
 self.addEventListener('fetch', event => {
-  // Network-first for API calls (Google Drive, etc.)
-  if (event.request.url.includes('googleapis.com') ||
-      event.request.url.includes('accounts.google.com')) {
+  // Network-first (never cached) for anything backend/live-data related:
+  // Google Drive (legacy migration reads), Firebase Auth/RTDB, and
+  // Cloudinary cover images. All of these need to always be fresh, never
+  // served from a stale cache.
+  const url = event.request.url;
+  if (url.includes('googleapis.com') ||
+      url.includes('accounts.google.com') ||
+      url.includes('firebasedatabase.app') ||
+      url.includes('firebaseapp.com') ||
+      url.includes('gstatic.com/firebasejs') ||
+      url.includes('res.cloudinary.com') ||
+      url.includes('api.cloudinary.com')) {
     event.respondWith(fetch(event.request));
     return;
   }
