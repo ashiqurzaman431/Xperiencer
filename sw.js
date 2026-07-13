@@ -1,5 +1,5 @@
 // Xperiencer Service Worker
-const CACHE_NAME = 'xperiencer-v6';
+const CACHE_NAME = 'xperiencer-v7';
 const PRECACHE = [
   './index.html',
   './manifest.json',
