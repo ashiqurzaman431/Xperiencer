@@ -4099,7 +4099,7 @@ async function confirmCrop(){
       document.getElementById('nd-cover-size-divider').style.display = 'block';
       document.getElementById('nd-cover-size-row').style.display = 'block';
       try{
-        const coverUrl = await cloudinaryUploadImage(_cropRawDataUrl);
+        const coverUrl = await cloudinaryUploadImage(croppedDataUrl);
         const applyUrl = (arr) => arr.map(x => x.id === ndEventId
           ? Object.assign({}, x, {coverUrl})
           : x
