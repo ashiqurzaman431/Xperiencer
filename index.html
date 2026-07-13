@@ -1543,7 +1543,8 @@ async function cloudinaryUploadImage(dataUrl){
   );
   const data = await uploadRes.json();
   if(!uploadRes.ok || !data.secure_url){
-    throw new Error(data.error?.message || 'Cloudinary upload failed');
+    console.error('Cloudinary upload failed. Status:', uploadRes.status, 'Response:', data);
+    throw new Error(data.error?.message || `HTTP ${uploadRes.status}`);
   }
   return data.secure_url; // store this directly on the event/note object
 }
@@ -4108,7 +4109,7 @@ async function confirmCrop(){
         else if(ndItemSource === 'routine') routines = applyUrl(routines);
         else events = applyUrl(events);
       }catch(err){
-        showToast('Cover upload failed — check connection');
+        showToast('Cover upload failed: ' + (err.message || 'unknown error'));
         console.warn('Cloudinary cover upload failed:', err);
         return;
       }
