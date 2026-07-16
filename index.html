@@ -3623,6 +3623,7 @@ function closeNoteDetail(){
   // then upload the final result to Drive — but only if something was
   // actually edited (ndDirty), and only with a visible progress popup.
   clearTimeout(ndRenderTimer);
+  clearTimeout(ndDriveSaveTimer);
   ndFlushHeavyUpdate();
   const wasDirty = ndDirty;
   const el = document.getElementById('note-detail');
@@ -4233,6 +4234,9 @@ function coverDragEnd(){
 
 let ndAutoSaveTimer = null;
 let ndRenderTimer = null;
+let ndDriveSaveTimer = null;
+// How long to wait after the user stops typing before pushing to Drive.
+const ND_DRIVE_SAVE_DELAY = 2500;
 // ndAutoSave runs on every keystroke but does ONLY the cheap part: update
 // the in-memory model. It does NOT touch the DOM (no renderEvents, no
 // innerHTML rewrites) and does NOT compute version history on every char.
@@ -4259,9 +4263,20 @@ async function ndAutoSave(){
   }
 
   // Debounce the expensive stuff (full list re-render).
-  // Drive upload itself is deferred until the note is closed (see closeNoteDetail).
   clearTimeout(ndRenderTimer);
   ndRenderTimer = setTimeout(ndFlushHeavyUpdate, 400);
+
+  // Instant-save: push to Drive automatically, but only once the person
+  // has actually paused typing for a bit — saving on every keystroke would
+  // spam Drive and slow typing down. Runs quietly (no toast) so it doesn't
+  // interrupt writing; closeNoteDetail's visible toast still covers the
+  // "just closed the note" case.
+  clearTimeout(ndDriveSaveTimer);
+  ndDriveSaveTimer = setTimeout(() => {
+    if(!ndDirty) return;
+    driveSaveData();
+    ndDirty = false;
+  }, ND_DRIVE_SAVE_DELAY);
 }
 
 function ndFlushHeavyUpdate(){
