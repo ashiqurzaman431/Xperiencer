@@ -106,7 +106,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 
 /* ── Nav ── */
 .nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-b));padding-bottom:var(--safe-b);background:var(--bg-card);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-around;padding-left:8px;padding-right:8px;z-index:100}
-.nb{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--text-dim);padding:8px 12px;transition:color .18s;-webkit-tap-highlight-color:transparent}
+.nb{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--text-dim);padding:8px 6px;transition:color .18s;-webkit-tap-highlight-color:transparent;flex:1;min-width:0}
 .nb.active{color:var(--lime)}
 .nb svg{width:22px;height:22px}
 .nb span{font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
@@ -727,6 +727,30 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
   </div>
 </div>
 
+<!-- ══ VIEW: TODOS ══ -->
+<div class="view" id="view-todos">
+  <div class="topbar">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div style="font-size:12px;color:var(--text-sec)">Xperiencer</div>
+        <div style="font-size:22px;font-weight:800;color:var(--text-pri)">ToDos</div>
+      </div>
+      <button id="todo-filter-btn" onclick="toggleTodoFilter()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text-sec);font-size:11px;font-weight:700;cursor:pointer">Show Completed</button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <input class="inp" id="todo-input" placeholder="Add a to-do…" onkeydown="if(event.key==='Enter')addTodo()" style="flex:1">
+      <button onclick="addTodo()" style="background:var(--lime);border:none;border-radius:10px;padding:8px 16px;color:#1a1410;font-size:12px;font-weight:800;cursor:pointer">Add</button>
+    </div>
+  </div>
+  <div class="sb" style="padding:0 20px">
+    <div id="todos-list"></div>
+    <div class="empty" id="todos-empty" style="display:none">
+      <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+      No to-dos yet. Add one above.
+    </div>
+  </div>
+</div>
+
 <!-- ══ VIEW: SCHEDULE ══ -->
 <div class="view" id="view-schedule">
   <div class="topbar">
@@ -814,12 +838,16 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
     <span>Events</span>
   </button>
-  <button class="nb" id="nav-schedule" onclick="showView('schedule')">
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-    <span>Schedule</span>
+  <button class="nb" id="nav-todos" onclick="showView('todos')">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+    <span>ToDos</span>
   </button>
   <button class="nav-fab" onclick="fabTap()">
     <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+  <button class="nb" id="nav-schedule" onclick="showView('schedule')">
+    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+    <span>Schedule</span>
   </button>
   <button class="nb" id="nav-routine" onclick="showView('routine')">
     <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -1214,6 +1242,7 @@ async function enterApp(){
       events      = data.events      || [];
       schedules   = data.schedules   || [];
       routines    = data.routines    || [];
+      todos       = data.todos       || [];
       completions = data.completions || {};
       deletionLog = data.deletionLog || [];
       doneSchedules = data.doneSchedules || {};
@@ -1233,6 +1262,7 @@ async function enterApp(){
   selectState('open');
   selectRtType('day');
   renderEvents();
+  renderTodos();
   renderSchStrip();
   renderSchedule();
   renderRoutine();
@@ -1308,6 +1338,7 @@ function tryBackgroundDriveMigration(){
           events      = data.events      || [];
           schedules   = data.schedules   || [];
           routines    = data.routines    || [];
+          todos       = data.todos       || [];
           completions = data.completions || {};
           deletionLog = data.deletionLog || [];
           doneSchedules = data.doneSchedules || {};
@@ -1316,7 +1347,7 @@ function tryBackgroundDriveMigration(){
           window.calendarArchive = data.calendarArchive || [];
           readyRoutines = data.readyRoutines || [];
           await migrateLegacyBloat();
-          renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView();
+          renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView(); renderTodos();
         }
       }
     });
@@ -1336,7 +1367,7 @@ async function driveInit(){ return; }
 const LIVE_FILE_NAME = 'Xperiencer Data.json';
 
 function driveBuildPayload(){
-  return JSON.stringify({ events, schedules, routines, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines });
+  return JSON.stringify({ events, schedules, routines, todos, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines });
 }
 
 // One-time cleanup for data saved before this cleanup existed:
@@ -1498,6 +1529,7 @@ async function restoreFromDriveBackup(){
         events      = data.events      || [];
         schedules   = data.schedules   || [];
         routines    = data.routines    || [];
+        todos       = data.todos       || [];
         completions = data.completions || {};
         deletionLog = data.deletionLog || [];
         doneSchedules = data.doneSchedules || {};
@@ -1571,6 +1603,7 @@ function cloudinaryTransformUrl(secureUrl, {w, h, x, y, cropW, cropH} = {}){
 let events      = [];
 let schedules   = [];
 let routines    = [];
+let todos       = [];
 let completions = {};
 let deletionLog = [];
 let schFilterScheduleOnly = false;
@@ -1819,10 +1852,11 @@ function showView(name){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-'+name).classList.add('active');
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
-  const nm={'events':'nav-events','schedule':'nav-schedule','routine':'nav-routine','calendar':'nav-calendar'};
+  const nm={'events':'nav-events','todos':'nav-todos','schedule':'nav-schedule','routine':'nav-routine','calendar':'nav-calendar'};
   if(nm[name]) document.getElementById(nm[name]).classList.add('active');
   curView=name;
   if(name==='events')   renderEvents();
+  if(name==='todos')    renderTodos();
   if(name==='schedule') { renderSchStrip(); schAutoScrollEnabled = true; renderSchedule(); }
   if(name==='routine')  { rtAutoScrollEnabled = true; renderRoutine(); }
   if(name==='calendar') renderCalView();
@@ -1831,7 +1865,47 @@ function showView(name){
 function fabTap(){
   if(curView==='schedule') openScheduleSheet();
   else if(curView==='routine') openRoutineSheet();
+  else if(curView==='todos') document.getElementById('todo-input').focus();
   else openEventSheet();
+}
+
+// ══════════════════════════════════════
+// TODOS VIEW
+// ══════════════════════════════════════
+function renderTodos(){
+  const el = document.getElementById('todos-list');
+  const em = document.getElementById('todos-empty');
+  if(!el) return;
+  if(!todos.length){
+    el.innerHTML='';
+    if(em) em.style.display='block';
+    return;
+  }
+  if(em) em.style.display='none';
+  el.innerHTML = todos.map(t => `
+    <div class="card" style="cursor:default;display:flex;align-items:center;gap:12px">
+      <div style="flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--text-pri);word-break:break-word">${esc(t.text)}</div>
+      <button onclick="deleteTodo('${t.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+  `).join('');
+}
+
+function addTodo(){
+  const inp = document.getElementById('todo-input');
+  const text = inp.value.trim();
+  if(!text) return;
+  todos.unshift({id:uid(), text, createdAt:new Date().toISOString()});
+  inp.value='';
+  renderTodos();
+  driveSaveData();
+}
+
+function deleteTodo(id){
+  todos = todos.filter(t=>t.id!==id);
+  renderTodos();
+  driveSaveData();
 }
 
 // ══════════════════════════════════════
