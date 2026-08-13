@@ -1243,6 +1243,7 @@ async function enterApp(){
       schedules   = data.schedules   || [];
       routines    = data.routines    || [];
       todos       = data.todos       || [];
+      todoSeqCounter = data.todoSeqCounter || 0;
       completions = data.completions || {};
       deletionLog = data.deletionLog || [];
       doneSchedules = data.doneSchedules || {};
@@ -1339,6 +1340,7 @@ function tryBackgroundDriveMigration(){
           schedules   = data.schedules   || [];
           routines    = data.routines    || [];
           todos       = data.todos       || [];
+          todoSeqCounter = data.todoSeqCounter || 0;
           completions = data.completions || {};
           deletionLog = data.deletionLog || [];
           doneSchedules = data.doneSchedules || {};
@@ -1367,7 +1369,7 @@ async function driveInit(){ return; }
 const LIVE_FILE_NAME = 'Xperiencer Data.json';
 
 function driveBuildPayload(){
-  return JSON.stringify({ events, schedules, routines, todos, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines });
+  return JSON.stringify({ events, schedules, routines, todos, todoSeqCounter, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines });
 }
 
 // One-time cleanup for data saved before this cleanup existed:
@@ -1530,6 +1532,7 @@ async function restoreFromDriveBackup(){
         schedules   = data.schedules   || [];
         routines    = data.routines    || [];
         todos       = data.todos       || [];
+        todoSeqCounter = data.todoSeqCounter || 0;
         completions = data.completions || {};
         deletionLog = data.deletionLog || [];
         doneSchedules = data.doneSchedules || {};
@@ -1604,6 +1607,8 @@ let events      = [];
 let schedules   = [];
 let routines    = [];
 let todos       = [];
+let todoSeqCounter = 0;
+let todoShowCompleted = false;
 let completions = {};
 let deletionLog = [];
 let schFilterScheduleOnly = false;
@@ -1872,20 +1877,44 @@ function fabTap(){
 // ══════════════════════════════════════
 // TODOS VIEW
 // ══════════════════════════════════════
+function ensureTodoSeq(){
+  let maxSeq = todos.reduce((m,t)=> t.seq ? Math.max(m,t.seq) : m, 0);
+  if(todoSeqCounter < maxSeq) todoSeqCounter = maxSeq;
+  const missing = todos.filter(t=>!t.seq).sort((a,b)=> new Date(a.createdAt||0) - new Date(b.createdAt||0));
+  missing.forEach(t=>{ todoSeqCounter++; t.seq = todoSeqCounter; });
+}
+
+function fmtTodoStamp(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  const dd = p2(d.getDate()), mm = p2(d.getMonth()+1), yyyy = d.getFullYear();
+  const hh = p2(d.getHours()), mi = p2(d.getMinutes());
+  return `${dd}/${mm}/${yyyy} · ${hh}:${mi}`;
+}
+
 function renderTodos(){
   const el = document.getElementById('todos-list');
   const em = document.getElementById('todos-empty');
   if(!el) return;
-  if(!todos.length){
+  ensureTodoSeq();
+  const list = todos.filter(t => todoShowCompleted ? t.done : !t.done);
+  if(!list.length){
     el.innerHTML='';
-    if(em) em.style.display='block';
+    if(em){
+      em.style.display='block';
+      em.lastChild.textContent = todoShowCompleted ? 'No completed to-dos yet.' : 'No to-dos yet. Add one above.';
+    }
     return;
   }
   if(em) em.style.display='none';
-  el.innerHTML = todos.map(t => `
-    <div class="card" style="cursor:default;display:flex;align-items:center;gap:12px">
-      <div style="flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--text-pri);word-break:break-word">${esc(t.text)}</div>
-      <button onclick="deleteTodo('${t.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center">
+  list.sort((a,b)=> (b.seq||0) - (a.seq||0));
+  el.innerHTML = list.map(t => `
+    <div class="card" style="cursor:pointer;display:flex;align-items:center;gap:12px" onclick="toggleTodoDone('${t.id}')">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:${t.done?'var(--text-dim)':'var(--text-pri)'};word-break:break-word;${t.done?'text-decoration:line-through':''}">${esc(t.text)}</div>
+        <div style="font-size:10px;color:var(--text-dim);margin-top:4px;letter-spacing:.02em">#${t.seq} &nbsp;·&nbsp; ${fmtTodoStamp(t.done ? (t.completedAt||t.createdAt) : t.createdAt)}</div>
+      </div>
+      <button onclick="event.stopPropagation();deleteTodo('${t.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;padding:4px;flex-shrink:0;display:flex;align-items:center">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
@@ -1896,10 +1925,31 @@ function addTodo(){
   const inp = document.getElementById('todo-input');
   const text = inp.value.trim();
   if(!text) return;
-  todos.unshift({id:uid(), text, createdAt:new Date().toISOString()});
+  todoSeqCounter++;
+  todos.unshift({id:uid(), seq:todoSeqCounter, text, done:false, createdAt:new Date().toISOString(), completedAt:null});
   inp.value='';
   renderTodos();
   driveSaveData();
+}
+
+function toggleTodoDone(id){
+  const t = todos.find(x=>x.id===id);
+  if(!t) return;
+  t.done = !t.done;
+  t.completedAt = t.done ? new Date().toISOString() : null;
+  renderTodos();
+  driveSaveData();
+}
+
+function toggleTodoFilter(){
+  todoShowCompleted = !todoShowCompleted;
+  const btn = document.getElementById('todo-filter-btn');
+  if(btn){
+    btn.textContent = todoShowCompleted ? 'Show Active' : 'Show Completed';
+    btn.style.color = todoShowCompleted ? 'var(--lime)' : 'var(--text-sec)';
+    btn.style.borderColor = todoShowCompleted ? 'var(--lime)' : 'var(--border)';
+  }
+  renderTodos();
 }
 
 function deleteTodo(id){
