@@ -742,7 +742,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
       <button onclick="addTodo()" style="background:var(--lime);border:none;border-radius:10px;padding:8px 16px;color:#1a1410;font-size:12px;font-weight:800;cursor:pointer">Add</button>
     </div>
   </div>
-  <div class="sb" style="padding:0 20px">
+  <div class="sb" style="padding:0 20px calc(var(--nav-h) + var(--safe-b) + 12px)">
     <div id="todos-list"></div>
     <div class="empty" id="todos-empty" style="display:none">
       <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
@@ -794,7 +794,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     </div>
     <div id="routine-streak-row" style="display:flex;gap:10px;margin-bottom:4px"></div>
   </div>
-  <div class="sb" style="padding:0 20px">
+  <div class="sb" style="padding:0 20px calc(var(--nav-h) + var(--safe-b) + 12px)">
     <div class="slabel" id="routine-date-label"></div>
     <div class="tl-container" id="routine-list"></div>
     <div class="empty" id="routine-empty" style="display:none">
@@ -823,7 +823,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
       <button class="cal-vbtn off" id="cvbtn-month" onclick="switchCalView('month')">Month</button>
     </div>
   </div>
-  <div class="sb" style="padding:0 20px">
+  <div class="sb" style="padding:0 20px calc(var(--nav-h) + var(--safe-b) + 12px)">
     <div id="cal-body"></div>
     <div class="day-detail" id="day-detail" style="display:none">
       <div class="day-detail-title" id="day-detail-title"></div>
