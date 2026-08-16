@@ -1907,7 +1907,7 @@ function renderTodos(){
     return;
   }
   if(em) em.style.display='none';
-  list.sort((a,b)=> (b.seq||0) - (a.seq||0));
+  list.sort((a,b)=> (a.seq||0) - (b.seq||0));
   el.innerHTML = list.map(t => `
     <div class="card" style="cursor:pointer;display:flex;align-items:center;gap:12px" onclick="toggleTodoDone('${t.id}')">
       <div style="flex:1;min-width:0">
