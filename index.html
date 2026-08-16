@@ -98,7 +98,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .view.active{opacity:1;pointer-events:all}
 
 /* ── Scroll ── */
-.sb{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:calc(var(--nav-h) + var(--safe-b) + 12px);background:var(--bg)}
+.sb{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:calc(var(--nav-h) + var(--safe-b) + 12px);background:var(--bg)}
 .sb::-webkit-scrollbar{display:none}
 
 /* ── Topbar ── */
@@ -1909,7 +1909,7 @@ function renderTodos(){
   if(em) em.style.display='none';
   list.sort((a,b)=> (a.seq||0) - (b.seq||0));
   el.innerHTML = list.map(t => `
-    <div class="card" style="cursor:pointer;display:flex;align-items:center;gap:12px" onclick="toggleTodoDone('${t.id}')">
+    <div class="card" style="cursor:pointer;display:flex;align-items:center;gap:12px" onclick="handleTodoClick('${t.id}')" ondblclick="handleTodoDblClick('${t.id}')">
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:600;color:${t.done?'var(--text-dim)':'var(--text-pri)'};word-break:break-word;${t.done?'text-decoration:line-through':''}">${esc(t.text)}</div>
         <div style="font-size:10px;color:var(--text-dim);margin-top:4px;letter-spacing:.02em">#${t.seq} &nbsp;·&nbsp; ${fmtTodoStamp(t.done ? (t.completedAt||t.createdAt) : t.createdAt)}</div>
@@ -1919,6 +1919,19 @@ function renderTodos(){
       </button>
     </div>
   `).join('');
+}
+
+let todoClickTimer = null;
+function handleTodoClick(id){
+  if(todoClickTimer) clearTimeout(todoClickTimer);
+  todoClickTimer = setTimeout(()=>{
+    todoClickTimer = null;
+    toggleTodoDone(id);
+  }, 280);
+}
+function handleTodoDblClick(id){
+  if(todoClickTimer){ clearTimeout(todoClickTimer); todoClickTimer=null; }
+  openTodoAsEvent(id);
 }
 
 function addTodo(){
@@ -3616,6 +3629,11 @@ let ndItemSource = 'event'; // 'event' | 'schedule' | 'routine'
 // ndAutoSave, which runs on real keystrokes/toggles). closeNoteDetail uses
 // this to skip the Drive upload entirely when the note was just viewed.
 let ndDirty = false;
+// Tracks an in-progress "open todo as event" draft: {todoId, title}.
+// The underlying event is only created (materialized) once the person
+// actually types something into the note body — until then nothing is
+// added to the events array and the source todo is left untouched.
+let ndTodoDraft = null;
 
 const ndIcons = {
   past:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 12l2 2 4-4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
@@ -3742,6 +3760,139 @@ function openNoteDetail(id, source='event'){
   document.getElementById('note-detail').classList.add('open');
 }
 
+function fmtNdDateTime(iso){
+  if(!iso) return 'Unknown';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})
+    + ' at ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+
+// Opens a to-do in the same full-screen note editor used for events, with
+// the to-do's text pre-filled as the title. Nothing is created yet — the
+// to-do stays exactly as it is in the ToDos list. Only once the person
+// types something into the note body does a real event get created
+// (title = the to-do text). See ndAutoSaveTodoDraft().
+function openTodoAsEvent(todoId){
+  const t = todos.find(x=>x.id===todoId);
+  if(!t) return;
+  ndTodoDraft = { todoId: t.id, title: t.text };
+  ndItemSource = 'event';
+  ndEventId = null;
+  ndDirty = false;
+
+  document.getElementById('nd-icon').innerHTML = ndIcons.future || '';
+  document.getElementById('nd-title-lbl').textContent = t.text || 'Add Note';
+  const titleEl = document.getElementById('nd-note-title');
+  titleEl.textContent = t.text || '';
+  titleEl.contentEditable = 'true';
+  titleEl.style.opacity = '';
+  const bodyEl = document.getElementById('nd-note-body');
+  bodyEl.innerHTML = '';
+  setTimeout(()=>ndBindTodos(), 0);
+
+  titleEl.oninput = () => ndAutoSaveTodoDraft();
+  bodyEl.oninput  = () => ndAutoSaveTodoDraft();
+  bodyEl.onkeydown = (ev) => {
+    if(ev.ctrlKey || ev.metaKey){
+      if(ev.key==='b'){ev.preventDefault();document.execCommand('bold');}
+      if(ev.key==='i'){ev.preventDefault();document.execCommand('italic');}
+      if(ev.key==='u'){ev.preventDefault();document.execCommand('underline');}
+    }
+    if(ev.key==='Tab'){
+      ev.preventDefault();
+      const sel = window.getSelection();
+      if(!sel.rangeCount) return;
+      const node = sel.anchorNode;
+      const li = node && node.parentElement && node.parentElement.closest('li');
+      if(li){
+        document.execCommand(ev.shiftKey ? 'outdent' : 'indent');
+      } else {
+        document.execCommand('insertHTML', false, '&emsp;');
+      }
+    }
+    if(ev.key==='/'){
+      setTimeout(()=>showSlashMenu(bodyEl), 0);
+    }
+    if(ev.key==='Enter' && ev.shiftKey){
+      ev.preventDefault();
+      document.execCommand('insertHTML', false, '<br>');
+    }
+  };
+
+  document.getElementById('nd-tags').innerHTML = '';
+  document.getElementById('nd-meta-row').innerHTML = `<span class="nd-state-badge" style="cursor:default;background:var(--bg-input);color:var(--text-sec)">FROM TO-DO</span>`;
+  document.getElementById('nd-dropdown').classList.remove('open');
+
+  const coverEl = document.getElementById('nd-cover');
+  if(coverEl) coverEl.style.display = '';
+  document.getElementById('nd-remove-cover-btn').style.display = 'none';
+  document.getElementById('nd-cover-size-divider').style.display = 'none';
+  document.getElementById('nd-cover-size-row').style.display = 'none';
+  const cardPosRow = document.getElementById('nd-card-pos-row');
+  if(cardPosRow) cardPosRow.style.display = 'none';
+  ndShowCover(null);
+
+  const infoBar = document.getElementById('nd-info-bar');
+  if(infoBar) infoBar.style.display = 'none';
+
+  document.getElementById('note-detail').classList.add('open');
+}
+
+// Fires on every keystroke while a to-do note is still a draft. Does
+// nothing until the note body actually has content, at which point it
+// creates the real event (once) and hands off to the normal ndAutoSave
+// flow for everything after.
+function ndAutoSaveTodoDraft(){
+  if(!ndTodoDraft) return;
+  const titleEl = document.getElementById('nd-note-title');
+  const bodyEl  = document.getElementById('nd-note-body');
+  const newTitle = titleEl.textContent.trim();
+  const newBody  = bodyEl.innerHTML;
+  const bodyHasContent = bodyEl.textContent.trim().length > 0;
+
+  if(!bodyHasContent) return; // still just a draft — don't create anything
+
+  const now = new Date().toISOString();
+  const obj = {
+    id: uid(),
+    title: newTitle || ndTodoDraft.title,
+    body: newBody,
+    openState: 'open',
+    state: calcTimeState(''),
+    date: '', time: '', dur: '',
+    tag: '',
+    createdAt: now,
+    updatedAt: now,
+    fromTodoId: ndTodoDraft.todoId
+  };
+  events.unshift(obj);
+  ndEventId = obj.id;
+  ndItemSource = 'event';
+  ndDirty = true;
+  ndTodoDraft = null;
+
+  // Hand off to the normal autosave path from here on.
+  titleEl.oninput = () => ndAutoSave();
+  bodyEl.oninput  = () => ndAutoSave();
+
+  const infoBar = document.getElementById('nd-info-bar');
+  if(infoBar) infoBar.style.display = '';
+  document.getElementById('nd-created-lbl').textContent = 'Created: ' + fmtNdDateTime(now);
+  document.getElementById('nd-updated-lbl').textContent = 'Last edited: ' + fmtNdDateTime(now);
+  document.getElementById('nd-status-lbl').textContent = 'OPEN';
+  document.getElementById('nd-status-lbl').style.color = 'var(--green)';
+  document.getElementById('nd-meta-row').innerHTML = `<span class="nd-state-badge" onclick="toggleOpenState()" style="cursor:pointer;background:var(--green-dim);color:var(--green);font-weight:800">Open</span>`;
+
+  clearTimeout(ndRenderTimer);
+  ndRenderTimer = setTimeout(ndFlushHeavyUpdate, 400);
+  clearTimeout(ndDriveSaveTimer);
+  ndDriveSaveTimer = setTimeout(() => {
+    if(!ndDirty) return;
+    driveSaveData();
+    ndDirty = false;
+  }, ND_DRIVE_SAVE_DELAY);
+}
+
 function closeNoteDetail(){
   // Flush any pending debounced note-body autosave before we lose ndEventId,
   // then upload the final result to Drive — but only if something was
@@ -3757,6 +3908,7 @@ function closeNoteDetail(){
   ndEventId = null;
   ndItemSource = 'event';
   ndDirty = false;
+  ndTodoDraft = null;
   if(wasDirty) showUploadToast('Saving your note');
 }
 
