@@ -486,6 +486,9 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .gallery-thumb-pad{padding-top:100%;display:block}
 .gallery-thumb-inner{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 .gallery-thumb-inner img{width:100%;height:100%;object-fit:cover;display:block}
+.gallery-thumb-tags{position:absolute;left:3px;right:3px;bottom:3px;display:flex;gap:2px;flex-wrap:nowrap;overflow:hidden;pointer-events:none;z-index:1}
+.gallery-thumb-tag{font-size:8px;font-weight:800;padding:2px 5px;border-radius:8px;background:rgba(10,8,5,.72);color:var(--lime);white-space:nowrap;backdrop-filter:blur(2px)}
+.gallery-thumb-tag.more{color:var(--text-dim);background:rgba(10,8,5,.6)}
 .mg-num{font-size:13px;font-weight:700;color:var(--text-pri)}
 .mg-count{font-size:8px;font-weight:800;background:var(--lime-dim);color:var(--lime);padding:1px 5px;border-radius:10px;margin-top:2px}
 
@@ -497,6 +500,7 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
    MODALS / SHEETS
 ════════════════════ */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;z-index:200;opacity:0;pointer-events:none;transition:opacity .25s var(--ease)}
+#gallery-tag-overlay{z-index:600}
 .overlay.open{opacity:1;pointer-events:all}
 .sheet{width:100%;background:var(--bg-card);border-radius:24px 24px 0 0;padding:20px 20px calc(24px + var(--safe-b));border-top:1px solid var(--border);max-height:92dvh;overflow-y:auto;transform:translateY(24px);transition:transform .25s var(--ease)}
 .overlay.open .sheet{transform:translateY(0)}
@@ -512,6 +516,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 .inp-row .inp{flex:1}
 .state-row{display:flex;gap:8px;margin-bottom:4px}
 .state-btn{flex:1;padding:10px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--bg-input);color:var(--text-sec);transition:all .18s;text-align:center}
+.state-btn.on{background:var(--lime);color:#1a1410;border-color:var(--lime)}
 .state-btn.sel-past{background:var(--bg-card2);color:var(--text-pri);border-color:var(--text-dim)}
 .state-btn.sel-present{background:var(--lime-dim);color:var(--lime);border-color:var(--lime)}
 .state-btn.sel-future{background:rgba(245,200,66,.1);color:var(--amber);border-color:var(--amber)}
@@ -943,18 +948,30 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div class="sheet-title" id="sch-sheet-title">New Schedule</div>
     <div class="field-label">Title</div>
     <input class="inp" id="sc-title" placeholder="Schedule title…">
-    <div class="field-label">Date & Time</div>
-    <div class="inp-row">
-      <input class="inp" id="sc-date" type="date" oninput="scOnStartChange()">
-      <input class="inp" id="sc-time" type="time" oninput="scOnStartChange()">
+    <div class="field-label" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Date & Time</span>
+      <button type="button" id="sc-est-toggle" class="state-btn" onclick="toggleScEstimated()" style="flex:0 0 auto;font-size:11px;padding:4px 10px">Estimated</button>
     </div>
-    <div class="field-label">Duration (minutes)</div>
-    <input class="inp" id="sc-dur" type="number" placeholder="e.g. 60" min="5" value="60" oninput="scOnStartChange()">
-    <div class="dur-hint" id="sc-dur-hint"></div>
-    <div class="field-label">Ends</div>
-    <div class="inp-row">
-      <input class="inp" id="sc-end-date" type="date" oninput="scOnEndChange()">
-      <input class="inp" id="sc-end-time" type="time" oninput="scOnEndChange()">
+    <div id="sc-exact-fields">
+      <div class="inp-row">
+        <input class="inp" id="sc-date" type="date" oninput="scOnStartChange()">
+        <input class="inp" id="sc-time" type="time" oninput="scOnStartChange()">
+      </div>
+      <div class="field-label">Duration (minutes)</div>
+      <input class="inp" id="sc-dur" type="number" placeholder="e.g. 60" min="5" value="60" oninput="scOnStartChange()">
+      <div class="dur-hint" id="sc-dur-hint"></div>
+      <div class="field-label">Ends</div>
+      <div class="inp-row">
+        <input class="inp" id="sc-end-date" type="date" oninput="scOnEndChange()">
+        <input class="inp" id="sc-end-time" type="time" oninput="scOnEndChange()">
+      </div>
+    </div>
+    <div id="sc-est-fields" style="display:none">
+      <div class="inp-row">
+        <input class="inp" id="sc-est-start-date" type="date">
+        <input class="inp" id="sc-est-end-date" type="date">
+      </div>
+      <div class="dur-hint">We don't know the exact day yet — it'll happen sometime in this window.</div>
     </div>
     <div class="field-label">Notes</div>
     <textarea class="inp" id="sc-notes" placeholder="Optional notes…" rows="2"></textarea>
@@ -1045,6 +1062,16 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div class="sheet-handle"></div>
     <div class="sheet-title">Show time for</div>
     <div id="timer-focus-list"></div>
+  </div>
+</div>
+
+<!-- ══ GALLERY: assign held image as a tag's default cover ══ -->
+<div class="overlay" id="gallery-tag-overlay" onclick="closeOverlay('gallery-tag-overlay',event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Set as default cover for…</div>
+    <input class="inp" id="gallery-tag-search" placeholder="Search tags…" oninput="filterGalleryTagList()">
+    <div id="gallery-tag-list"></div>
   </div>
 </div>
 
@@ -1211,7 +1238,8 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div style="font-size:15px;font-weight:800;color:var(--text-pri)">App Gallery</div>
     <div style="width:72px"></div>
   </div>
-  <div style="padding:12px 16px 6px;font-size:11px;color:var(--text-dim)">Covers you've used before — tap to reuse</div>
+  <div style="padding:12px 16px 6px;font-size:11px;color:var(--text-dim)">Covers you've used before — tap to reuse, hold to set as a tag's default</div>
+  <input class="inp" id="gallery-search" placeholder="Search by tag…" oninput="filterGalleryGrid()" style="margin:0 16px 10px;width:auto">
   <div id="gallery-grid" style="flex:1;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;padding:3px;align-content:start"></div>
   <div id="gallery-empty" style="display:none;flex:1;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--text-dim);font-size:13px;text-align:center;padding:40px">
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
@@ -1311,6 +1339,7 @@ async function enterApp(){
       readyRoutines = data.readyRoutines || [];
       timerCardCover = data.timerCardCover || null;
       focusedActionId = data.focusedActionId || null;
+      tagCovers = data.tagCovers || {};
     }
     // One-time cleanup of legacy embedded data (old note-version history,
     // duplicated raw cover photos, embedded card-crop images) from data
@@ -1410,6 +1439,7 @@ function tryBackgroundDriveMigration(){
           readyRoutines = data.readyRoutines || [];
           timerCardCover = data.timerCardCover || null;
       focusedActionId = data.focusedActionId || null;
+          tagCovers = data.tagCovers || {};
           await migrateLegacyBloat();
           renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView(); renderTodos();
         }
@@ -1431,7 +1461,7 @@ async function driveInit(){ return; }
 const LIVE_FILE_NAME = 'Xperiencer Data.json';
 
 function driveBuildPayload(){
-  return JSON.stringify({ events, schedules, routines, todos, todoSeqCounter, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines, timerCardCover, focusedActionId });
+  return JSON.stringify({ events, schedules, routines, todos, todoSeqCounter, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines, timerCardCover, focusedActionId, tagCovers });
 }
 
 // One-time cleanup for data saved before this cleanup existed:
@@ -1604,6 +1634,7 @@ async function restoreFromDriveBackup(){
         readyRoutines = data.readyRoutines || [];
         timerCardCover = data.timerCardCover || null;
       focusedActionId = data.focusedActionId || null;
+        tagCovers = data.tagCovers || {};
 
         await migrateLegacyBloat();
         const saved = await driveSaveData();
@@ -1682,6 +1713,15 @@ let nextActionTitle = '';
 let timerCardCover = null;
 let focusedActionId = null;
 let lastActionItems = [];
+let tagCovers = {}; // { tagname (lowercase, no #): coverUrl }
+
+function getTagDefaultCover(tagStr){
+  const tags = (tagStr||'').split(' ').filter(Boolean).map(t=>t.replace(/^#/,'').toLowerCase());
+  for(const t of tags){
+    if(tagCovers[t]) return tagCovers[t];
+  }
+  return null;
+}
 let readyRoutines = [];
 let doneSchedules = {};
 let adjustedDeadlines = {}; // keyed by `${sourceId}_${date}` -> adjusted duration (minutes) for that occurrence
@@ -1696,6 +1736,7 @@ let allSearchQuery = '';
 let editingEv = null;
 let editingSc = null;
 let reschedulingSc = null; // {id, oldDate} when rescheduling a missed schedule
+let scIsEstimated = false;
 let editingRt = null;
 let evState   = 'open';
 let rtType    = 'day';
@@ -1854,7 +1895,7 @@ function rtOnEndChange(){
 // ══════════════════════════════════════
 function getAllSlotsOnDate(dateStr, excludeId=null){
   const slots=[];
-  schedules.filter(s=>s.date===dateStr && s.id!==excludeId).forEach(s=>{
+  schedules.filter(s=>s.date===dateStr && s.id!==excludeId && !s.isEstimated).forEach(s=>{
     slots.push({start:timeToMin(s.time),end:timeToMin(s.time)+(+s.dur||60)});
   });
   // routines that apply on this date
@@ -2365,7 +2406,9 @@ function renderEvents(){
     const isSchRt = e._source==='schedule' || e._source==='routine';
     const skin = e._source==='routine' ? 'routine' : (isSchRt ? 'tinted' : 'dark');
     const tags=(e.tag||'').split(' ').filter(Boolean);
-    const timeLbl=e.date?(()=>{
+    const timeLbl = e.isEstimated
+      ? `Est. ${e.estStartDate||''} – ${e.estEndDate||e.estStartDate||''}`
+      : e.date?(()=>{
       const today = todayStr();
       const wd = weekdayShort(e.date);
       if(e.date === today) return 'Today, '+wd+(e.time?' at '+fmtTime(e.time):'');
@@ -2381,22 +2424,25 @@ function renderEvents(){
       : e._source==='routine'
         ? `handleSchRtTap('${e.id}','routine')`
         : `openNoteDetail('${e.id}')`;
-    const overlay = isSchRt ? getCardOverlayState(e) : null;
+    const overlay = (isSchRt && !e.isEstimated) ? getCardOverlayState(e) : null;
     const overlayClass = overlay ? ` occ-${overlay.state}` : '';
     const overlayBadgeLbl = overlay ? {alerting:'Starting soon', ongoing:'In progress', missed:'Missed'}[overlay.state] : '';
     const closeBtn = (overlay && overlay.state==='missed')
       ? `<button class="ev-close-btn" onclick="event.stopPropagation();closeSchRtCard('${e.id}','${e._source}','${overlay.occDate}')">Close</button>`
       : '';
-    const typeBadge = e._source==='schedule'
+    const typeBadge = (e._source==='schedule'
       ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(200,232,50,.14);color:var(--lime);letter-spacing:.05em">SCHEDULE</span>`
       : e._source==='routine'
         ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(200,232,50,.14);color:var(--lime);letter-spacing:.05em">ROUTINE</span>`
-        : '';
+        : '') + (e.isEstimated
+      ? `<span style="font-size:9px;font-weight:800;padding:2px 8px;border-radius:20px;background:rgba(245,200,66,.14);color:var(--amber);letter-spacing:.05em">ESTIMATED</span>`
+      : '');
     const hasCover = !!e.hasCover;
-    const coverSizeClass = hasCover ? ` cover-${e.coverSize||'md'}` : '';
+    const tagDefaultCover = !hasCover && !e.hasCardCrop ? getTagDefaultCover(e.tag) : null;
+    const coverSizeClass = (hasCover || tagDefaultCover) ? ` cover-${e.coverSize||'md'}` : '';
     const cardBgUrl = e.hasCardCrop
       ? (e.cardCoverUrl || null)
-      : (hasCover && e.coverUrl ? e.coverUrl : null);
+      : (hasCover && e.coverUrl ? e.coverUrl : tagDefaultCover);
     const coverInlineStyle = cardBgUrl
       ? ` style="background-image:url('${cardBgUrl}');background-position:center ${e.coverCardPosition != null ? e.coverCardPosition : 50}%"`
       : '';
@@ -2421,7 +2467,7 @@ function renderEvents(){
         ${badgesRow}
         ${tags.length?`<div class="ev-tags">${tags.map(t=>`<span class="ev-tag">${esc(t)}</span>`).join('')}</div>`:''}
         ${bodyText?`<div class="ev-body">${esc(bodyText)}</div>`:'<div class="ev-body" style="flex:1"></div>'}`;
-    return `<div class="ev-hcard ${skin}${hasCover?' has-cover':''}${coverSizeClass}${isQuote?' quote-card':''}${overlayClass}" id="${idPrefix}${e.id}"${coverInlineStyle} onclick="${clickFn}">
+    return `<div class="ev-hcard ${skin}${(hasCover||tagDefaultCover)?' has-cover':''}${coverSizeClass}${isQuote?' quote-card':''}${overlayClass}" id="${idPrefix}${e.id}"${coverInlineStyle} onclick="${clickFn}">
         <button class="ev-action" onclick="event.stopPropagation();${clickFn}">${actionIcons[timeState]||actionIcons.future}</button>
         <div class="ev-icon">${cardIcons[timeState]||cardIcons.future}</div>
         ${typeBadge}
@@ -2697,7 +2743,10 @@ function selectSchDate(ds){
 
 function getSchedulesOnDate(ds){
   const items=[];
-  schedules.filter(s=>s.date===ds).forEach(s=>items.push({...s,_type:'schedule'}));
+  schedules.filter(s=>s.isEstimated
+    ? (ds>=s.estStartDate && ds<=(s.estEndDate||s.estStartDate))
+    : s.date===ds
+  ).forEach(s=>items.push({...s,_type:'schedule', date: ds}));
   routines.forEach(r=>{
     if(routineAppliesOn(r,ds)) items.push({...r,_type:'routine',date:ds});
   });
@@ -2712,21 +2761,30 @@ function uniCard(item, onclick){
   const typeBadgeColor = isRoutine ? 'var(--green)' : isEvent ? 'var(--lime)' : 'var(--text-sec)';
   const typeBadgeBg = isRoutine ? 'var(--green-dim)' : isEvent ? 'var(--lime-dim)' : 'var(--bg-input)';
   const desc = item.notes || item.description || '';
-  return `<div class="uni-card" onclick="${onclick}">
-    <div class="uni-card-top">
-      <div class="uni-card-title">${esc(item.title)}</div>
-      <div class="uni-type-badge" style="background:${typeBadgeBg};color:${typeBadgeColor}">${typeLabel}</div>
-    </div>
-    ${desc ? `<div class="uni-card-desc">${esc(desc)}</div>` : ''}
-    <div class="uni-card-footer">
-      <div class="uni-card-meta">
+  const timeMeta = item.isEstimated
+    ? `<div class="uni-card-meta">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Est. ${esc(item.estStartDate||'')} – ${esc(item.estEndDate||item.estStartDate||'')}
+      </div>`
+    : `<div class="uni-card-meta">
         <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
         ${esc(item.date||'—')}
       </div>
       <div class="uni-card-meta">
         <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
         ${fmtTime(item.time)} — ${fmtTimeEnd(item.time, item.dur)} · ${item.dur}min
+      </div>`;
+  return `<div class="uni-card" onclick="${onclick}">
+    <div class="uni-card-top">
+      <div class="uni-card-title">${esc(item.title)}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${item.isEstimated?`<span class="uni-type-badge" style="background:rgba(245,200,66,.14);color:var(--amber)">Estimated</span>`:''}
+        <div class="uni-type-badge" style="background:${typeBadgeBg};color:${typeBadgeColor}">${typeLabel}</div>
       </div>
+    </div>
+    ${desc ? `<div class="uni-card-desc">${esc(desc)}</div>` : ''}
+    <div class="uni-card-footer">
+      ${timeMeta}
     </div>
   </div>`;
 }
@@ -2953,6 +3011,16 @@ function getEventState(date,time,dur){
 // ══════════════════════════════════════
 // SCHEDULE SHEET
 // ══════════════════════════════════════
+function toggleScEstimated(){
+  scIsEstimated = !scIsEstimated;
+  applyScEstimatedUI();
+}
+function applyScEstimatedUI(){
+  document.getElementById('sc-exact-fields').style.display = scIsEstimated ? 'none' : 'block';
+  document.getElementById('sc-est-fields').style.display = scIsEstimated ? 'block' : 'none';
+  document.getElementById('sc-est-toggle').classList.toggle('on', scIsEstimated);
+}
+
 function openScheduleSheet(id=null, isReschedule=false){
   if(!isReschedule) reschedulingSc=null;
   editingSc=id;
@@ -2971,6 +3039,10 @@ function openScheduleSheet(id=null, isReschedule=false){
   document.getElementById('sc-tag').value=s?(s.tag||''):'';
   document.getElementById('sc-conflict-box').innerHTML='';
   document.getElementById('sc-delete-btn').style.display=id?'block':'none';
+  scIsEstimated = !!(s && s.isEstimated);
+  document.getElementById('sc-est-start-date').value = s && s.isEstimated ? (s.estStartDate||'') : '';
+  document.getElementById('sc-est-end-date').value = s && s.isEstimated ? (s.estEndDate||'') : '';
+  applyScEstimatedUI();
   {
     const scDate=document.getElementById('sc-date').value, scTime=document.getElementById('sc-time').value, scDur=document.getElementById('sc-dur').value;
     const {endDate,endTime}=computeEndFromStart(scDate,scTime,+scDur);
@@ -2994,6 +3066,29 @@ function startReschedule(id, oldDate){
 async function saveSchedule(){
   const title=document.getElementById('sc-title').value.trim();
   if(!title){showToast('Enter a title');return;}
+
+  if(scIsEstimated){
+    const estStartDate=document.getElementById('sc-est-start-date').value;
+    const estEndDateRaw=document.getElementById('sc-est-end-date').value;
+    if(!estStartDate){showToast('Pick an estimated start date');return;}
+    const estEndDate = estEndDateRaw || estStartDate;
+    const existingSc = editingSc ? schedules.find(s=>s.id===editingSc) : null;
+    const obj=Object.assign({}, existingSc, {
+      id:editingSc||uid(), title,
+      isEstimated:true, estStartDate, estEndDate,
+      date:estStartDate, time:'', dur:'',
+      notes:document.getElementById('sc-notes').value.trim(),
+      tag:document.getElementById('sc-tag').value.trim()
+    });
+    if(editingSc){schedules=schedules.map(s=>s.id===editingSc?obj:s);}
+    else schedules.push(obj);
+    document.getElementById('sch-overlay').classList.remove('open');
+    renderSchStrip();renderSchedule();renderCalView();renderEvents();
+    showToast(editingSc?'Schedule updated':'Schedule saved');
+    driveSaveData();
+    return;
+  }
+
   const date=document.getElementById('sc-date').value;
   const time=document.getElementById('sc-time').value;
   const dur=+document.getElementById('sc-dur').value||60;
@@ -3016,7 +3111,7 @@ async function saveSchedule(){
   }
 
   const existingSc = editingSc ? schedules.find(s=>s.id===editingSc) : null;
-  const obj=Object.assign({}, existingSc, {id:editingSc||uid(),title,date,time,dur,notes:document.getElementById('sc-notes').value.trim(),tag:document.getElementById('sc-tag').value.trim()});
+  const obj=Object.assign({}, existingSc, {id:editingSc||uid(),title,date,time,dur,isEstimated:false,estStartDate:null,estEndDate:null,notes:document.getElementById('sc-notes').value.trim(),tag:document.getElementById('sc-tag').value.trim()});
   if(editingSc){schedules=schedules.map(s=>s.id===editingSc?obj:s);}
   else schedules.push(obj);
   document.getElementById('sch-overlay').classList.remove('open');
@@ -3698,7 +3793,7 @@ function renderWeekView(){
     html+=`<div class="wg-time">${h%12||12}${h<12?'a':'p'}</div>`;
     days.forEach(d=>{
       const ds=toDS(d);
-      const cellItems=getSchedulesOnDate(ds).filter(item=>{
+      const cellItems=getSchedulesOnDate(ds).filter(item=>!item.isEstimated).filter(item=>{
         const sm=timeToMin(item.time);
         return sm>=h*60&&sm<(h+1)*60;
       });
@@ -3981,7 +4076,7 @@ function openNoteDetail(id, source='event'){
     cardPosRow.style.display = hasCoverNow ? 'block' : 'none';
   }
   ndUpdateCoverSizeButtons(e.coverSize||'md');
-  ndShowCover(hasCoverNow ? (e.coverUrl || null) : null);
+  ndShowCover(hasCoverNow ? (e.coverUrl || null) : getTagDefaultCover(e.tag));
   // Info bar — events only
   const infoBar = document.getElementById('nd-info-bar');
   if(infoBar) infoBar.style.display = source==='event' ? '' : 'none';
@@ -5145,11 +5240,12 @@ function applyListType(type){
 // ══════════════════════════════════════
 // APP GALLERY
 // ══════════════════════════════════════
+let gGalleryCoverFiles = [];
+
 async function openAppGallery(){
   document.getElementById('app-gallery').style.display = 'flex';
-  const grid = document.getElementById('gallery-grid');
-  const empty = document.getElementById('gallery-empty');
-  empty.style.display = 'none';
+  const searchEl = document.getElementById('gallery-search');
+  if(searchEl) searchEl.value = '';
 
   // Gallery is just distinct coverUrl values already used across your own
   // events/schedules/routines — Cloudinary gives us the URL directly, so
@@ -5164,28 +5260,138 @@ async function openAppGallery(){
     }
   });
 
+  // Reverse-lookup: which tags point to each image, so thumbnails can show
+  // "does this image already have a tag" at a glance.
+  coverFiles.forEach(f => {
+    f.tags = Object.keys(tagCovers).filter(t => tagCovers[t] === f.url).sort();
+  });
+
+  gGalleryCoverFiles = coverFiles;
+  renderGalleryGrid(coverFiles);
+}
+
+function renderGalleryGrid(coverFiles){
+  const grid = document.getElementById('gallery-grid');
+  const empty = document.getElementById('gallery-empty');
+
   if(!coverFiles.length){
     grid.innerHTML = '';
     empty.style.display = 'flex';
     return;
   }
+  empty.style.display = 'none';
 
+  const MAX_CHIPS = 2;
   grid.innerHTML = coverFiles.map(f => {
     const safeUrl = f.url.replace(/'/g, "%27");
+    const shown = f.tags.slice(0, MAX_CHIPS);
+    const overflow = f.tags.length - shown.length;
+    const chips = f.tags.length
+      ? `<div class="gallery-thumb-tags">
+          ${shown.map(t=>`<span class="gallery-thumb-tag">#${esc(t)}</span>`).join('')}
+          ${overflow>0 ? `<span class="gallery-thumb-tag more">+${overflow}</span>` : ''}
+        </div>`
+      : '';
     return `<div class="gallery-thumb" onclick="selectGalleryImage('${safeUrl}')">
       <div class="gallery-thumb-pad"></div>
       <div class="gallery-thumb-inner">
         <img src="${f.url}">
       </div>
+      ${chips}
     </div>`;
   }).join('');
+}
+
+function filterGalleryGrid(){
+  const q = (document.getElementById('gallery-search').value||'').trim().toLowerCase().replace(/^#/,'');
+  if(!q){ renderGalleryGrid(gGalleryCoverFiles); return; }
+  renderGalleryGrid(gGalleryCoverFiles.filter(f => f.tags.some(t => t.includes(q))));
 }
 
 function closeAppGallery(){
   document.getElementById('app-gallery').style.display = 'none';
 }
 
+// ── Hold an image in the gallery → assign it as a tag's default cover ──
+let gGalleryLongPressFired = false;
+let gGalleryHeldUrl = null;
+
+function allUsedTags(){
+  const set = new Set();
+  [...events, ...schedules, ...routines].forEach(item=>{
+    (item.tag||'').split(' ').filter(Boolean).forEach(t=>set.add(t.replace(/^#/,'').toLowerCase()));
+  });
+  return [...set].sort();
+}
+
+let gGalleryUnassignedTags = [];
+
+function openGalleryTagPicker(url){
+  gGalleryHeldUrl = url;
+  gGalleryUnassignedTags = allUsedTags().filter(t=>!tagCovers[t]);
+  const searchEl = document.getElementById('gallery-tag-search');
+  if(searchEl) searchEl.value = '';
+  renderGalleryTagList(gGalleryUnassignedTags);
+  document.getElementById('gallery-tag-overlay').classList.add('open');
+}
+
+function renderGalleryTagList(tags){
+  const listEl = document.getElementById('gallery-tag-list');
+  if(!tags.length){
+    listEl.innerHTML = `<div style="font-size:13px;color:var(--text-dim);padding:10px 0">${gGalleryUnassignedTags.length ? 'No matching tags.' : 'Every tag already has a default cover.'}</div>`;
+  } else {
+    listEl.innerHTML = tags.map(t=>`<div class="nd-drop-item" style="width:100%" onclick="assignTagCover('${t}')">#${esc(t)}</div>`).join('');
+  }
+}
+
+function filterGalleryTagList(){
+  const q = (document.getElementById('gallery-tag-search').value||'').trim().toLowerCase().replace(/^#/,'');
+  renderGalleryTagList(q ? gGalleryUnassignedTags.filter(t=>t.includes(q)) : gGalleryUnassignedTags);
+}
+
+async function assignTagCover(tag){
+  if(!gGalleryHeldUrl) return;
+  tagCovers[tag] = gGalleryHeldUrl;
+  document.getElementById('gallery-tag-overlay').classList.remove('open');
+  const heldUrl = gGalleryHeldUrl;
+  gGalleryHeldUrl = null;
+  await driveSaveData();
+  renderEvents();
+  // Refresh the still-open gallery grid underneath so the new chip shows immediately.
+  const entry = gGalleryCoverFiles.find(f => f.url === heldUrl);
+  if(entry && !entry.tags.includes(tag)) entry.tags.push(tag);
+  renderGalleryGrid(gGalleryCoverFiles);
+  showToast('Default cover set for #'+tag);
+}
+
+// Delegated 600ms long-press on gallery thumbnails (grid is rebuilt often,
+// so this listens on the stable parent rather than per-thumbnail).
+(function(){
+  let pressTimer = null;
+  const grid = document.getElementById('gallery-grid');
+  if(!grid) return;
+  const start = (e)=>{
+    const thumb = e.target.closest('.gallery-thumb');
+    if(!thumb) return;
+    const img = thumb.querySelector('img');
+    const url = img ? img.getAttribute('src') : null;
+    if(!url) return;
+    pressTimer = setTimeout(()=>{
+      gGalleryLongPressFired = true;
+      openGalleryTagPicker(url);
+    }, 600);
+  };
+  const cancel = ()=>{ clearTimeout(pressTimer); };
+  grid.addEventListener('touchstart', start, {passive:true});
+  grid.addEventListener('touchend', cancel, {passive:true});
+  grid.addEventListener('touchmove', cancel, {passive:true});
+  grid.addEventListener('mousedown', start);
+  grid.addEventListener('mouseup', cancel);
+  grid.addEventListener('mouseleave', cancel);
+})();
+
 async function selectGalleryImage(coverUrl){
+  if(gGalleryLongPressFired){ gGalleryLongPressFired = false; return; }
   if(!coverUrl) return;
   closeAppGallery();
 
