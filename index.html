@@ -274,19 +274,19 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .ev-all-grid .ev-hcard .ev-action{display:none}
 .ev-all-badge{font-size:8px;font-weight:800;padding:2px 6px;border-radius:20px;letter-spacing:.05em;display:inline-block;margin-bottom:2px}
 .ev-hcard{min-width:255px;max-width:290px;border-radius:22px;padding:20px;flex-shrink:0;cursor:pointer;transition:transform .15s var(--ease),opacity .3s var(--ease);display:flex;flex-direction:column;min-height:110px;position:relative;overflow:hidden}
-.ev-clock-card{min-width:150px;max-width:170px;border-radius:22px;padding:14px 10px;flex-shrink:0;display:flex;flex-direction:column;min-height:150px;position:relative;overflow:hidden;cursor:default;
+.ev-clock-card{min-width:150px;max-width:170px;border-radius:22px;padding:14px 10px;flex-shrink:0;display:flex;flex-direction:column;align-items:stretch;justify-content:center;min-height:150px;position:relative;overflow:hidden;cursor:default;
   background:linear-gradient(165deg, rgba(200,232,50,.16), rgba(200,232,50,.03));
   backdrop-filter:blur(18px) saturate(140%);
   -webkit-backdrop-filter:blur(18px) saturate(140%);
   border:1px solid rgba(255,255,255,.22);
   box-shadow:inset 0 1px 1px rgba(255,255,255,.35), inset 0 -12px 24px rgba(200,232,50,.06);
 }
-.ev-clock-mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;z-index:1}
+.ev-clock-mid{display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;z-index:1}
 .ev-clock-time{font-size:30px;font-weight:800;color:var(--lime);letter-spacing:.01em;font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap}
 .ev-clock-ampm{font-size:13px;font-weight:800;letter-spacing:.03em;margin-left:3px;vertical-align:middle}
-.ev-clock-date{font-size:12px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-top:8px}
-.ev-clock-next{position:relative;z-index:1;text-align:center}
-.ev-clock-timer{font-size:19px;font-weight:800;color:var(--lime);line-height:1.2;font-variant-numeric:tabular-nums}
+.ev-clock-date{font-size:12px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+.ev-clock-next{position:relative;z-index:1;text-align:center;margin-top:14px}
+.ev-clock-timer{font-size:19px;font-weight:800;color:var(--lime);line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;width:100%}
 .ev-clock-title-row{font-size:13px;font-weight:600;color:var(--text-pri);line-height:1.4;margin-top:2px}
 .ev-clock-next b{color:var(--lime);font-weight:800}
 .ev-clock-card.has-cover{background-size:cover;background-position:center}
@@ -2256,9 +2256,23 @@ function updateLiveClockCard(){
         if(dd||hh||mm) parts.push(mm+'m');
         parts.push(ss+'s');
         timerEl.textContent = parts.join(' ');
+        fitTimerOneLine(timerEl);
         titleEl.innerHTML = `until "${esc(nextActionTitle)}"`;
       }
     }
+  }
+}
+
+// Shrinks the timer text's font-size until it fits on a single line
+// (never wraps), then stops — restores the base size first so it can
+// grow back down from a shorter earlier string.
+const TIMER_MAX_FONT = 19, TIMER_MIN_FONT = 10;
+function fitTimerOneLine(el){
+  el.style.fontSize = TIMER_MAX_FONT + 'px';
+  let size = TIMER_MAX_FONT;
+  while(el.scrollWidth > el.clientWidth && size > TIMER_MIN_FONT){
+    size -= 1;
+    el.style.fontSize = size + 'px';
   }
 }
 setInterval(updateLiveClockCard, 1000);
