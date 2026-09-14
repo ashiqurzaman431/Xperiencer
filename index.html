@@ -274,6 +274,33 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .ev-all-grid .ev-hcard .ev-action{display:none}
 .ev-all-badge{font-size:8px;font-weight:800;padding:2px 6px;border-radius:20px;letter-spacing:.05em;display:inline-block;margin-bottom:2px}
 .ev-hcard{min-width:255px;max-width:290px;border-radius:22px;padding:20px;flex-shrink:0;cursor:pointer;transition:transform .15s var(--ease),opacity .3s var(--ease);display:flex;flex-direction:column;min-height:110px;position:relative;overflow:hidden}
+.ev-clock-card{min-width:150px;max-width:170px;border-radius:22px;padding:14px 10px;flex-shrink:0;display:flex;flex-direction:column;min-height:150px;position:relative;overflow:hidden;cursor:default;
+  background:linear-gradient(165deg, rgba(200,232,50,.16), rgba(200,232,50,.03));
+  backdrop-filter:blur(18px) saturate(140%);
+  -webkit-backdrop-filter:blur(18px) saturate(140%);
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.35), inset 0 -12px 24px rgba(200,232,50,.06);
+}
+.ev-clock-mid{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;z-index:1}
+.ev-clock-time{font-size:30px;font-weight:800;color:var(--lime);letter-spacing:.01em;font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap}
+.ev-clock-ampm{font-size:13px;font-weight:800;letter-spacing:.03em;margin-left:3px;vertical-align:middle}
+.ev-clock-date{font-size:12px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin-top:8px}
+.ev-clock-next{position:relative;z-index:1;text-align:center}
+.ev-clock-timer{font-size:19px;font-weight:800;color:var(--lime);line-height:1.2;font-variant-numeric:tabular-nums}
+.ev-clock-title-row{font-size:13px;font-weight:600;color:var(--text-pri);line-height:1.4;margin-top:2px}
+.ev-clock-next b{color:var(--lime);font-weight:800}
+.ev-clock-card.has-cover{background-size:cover;background-position:center}
+.ev-clock-card.has-cover::before{content:'';position:absolute;inset:0;border-radius:22px;pointer-events:none;z-index:0;
+  background:linear-gradient(165deg, rgba(10,8,5,.35) 0%, rgba(10,8,5,.5) 45%, rgba(8,6,4,.72) 100%);
+  backdrop-filter:blur(6px) saturate(120%);
+  -webkit-backdrop-filter:blur(6px) saturate(120%);
+}
+.ev-clock-card.has-cover .ev-clock-mid,
+.ev-clock-card.has-cover .ev-clock-next{position:relative;z-index:1}
+.ev-clock-card.has-cover .ev-clock-time{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9)}
+.ev-clock-card.has-cover .ev-clock-date{color:rgba(255,255,255,.85)}
+.ev-clock-card.has-cover .ev-clock-next{color:rgba(255,255,255,.92)}
+.ev-clock-card.has-cover .ev-clock-next b{color:var(--lime)}
 .ev-hcard:active{transform:scale(.97)}
 .ev-hcard.dark{background-color:#15130f;border:1px solid rgba(255,255,255,.08);color:var(--text-pri)}
 .ev-hcard.tinted{background-color:#1d2218;border:1px solid rgba(200,232,50,.18);color:var(--text-pri)}
@@ -990,6 +1017,37 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
   </div>
 </div>
 
+<!-- ══ TIMER CARD: cover picker sheet ══ -->
+<div class="overlay" id="timer-cover-overlay" onclick="closeOverlay('timer-cover-overlay',event)">
+  <div class="sheet" style="padding-bottom:calc(24px + var(--safe-b))">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Timer card cover</div>
+    <div class="nd-drop-item" style="position:relative;overflow:hidden">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Upload
+      <input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:0" onchange="timerCardSetCover(this)">
+    </div>
+    <button class="nd-drop-item" style="width:100%;text-align:left" onclick="document.getElementById('timer-cover-overlay').classList.remove('open');galleryTarget='timer';openAppGallery()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/><path d="M3 9h18"/></svg>
+      From gallery
+    </button>
+    <div class="nd-drop-divider" id="timer-remove-cover-divider" style="display:none"></div>
+    <button class="nd-drop-item" id="timer-remove-cover-btn" style="width:100%;text-align:left;display:none" onclick="timerCardRemoveCover()">
+      <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      Remove cover
+    </button>
+  </div>
+</div>
+
+<!-- ══ TIMER CARD: focus-event picker sheet ══ -->
+<div class="overlay" id="timer-focus-overlay" onclick="closeOverlay('timer-focus-overlay',event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Show time for</div>
+    <div id="timer-focus-list"></div>
+  </div>
+</div>
+
 <!-- ══ NOTE DETAIL VIEW ══ -->
 <div class="note-detail" id="note-detail">
   <div class="nd-topbar">
@@ -1007,7 +1065,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
           Add cover
           <input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:0" onchange="ndSetCover(this);document.getElementById('nd-dropdown').classList.remove('open')">
         </div>
-        <button class="nd-drop-item" onclick="openAppGallery();document.getElementById('nd-dropdown').classList.remove('open')">
+        <button class="nd-drop-item" onclick="galleryTarget='note';openAppGallery();document.getElementById('nd-dropdown').classList.remove('open')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/><path d="M3 9h18"/></svg>
           From gallery
         </button>
@@ -1251,6 +1309,8 @@ async function enterApp(){
       lastResetDate = data.lastResetDate || '';
       window.calendarArchive = data.calendarArchive || [];
       readyRoutines = data.readyRoutines || [];
+      timerCardCover = data.timerCardCover || null;
+      focusedActionId = data.focusedActionId || null;
     }
     // One-time cleanup of legacy embedded data (old note-version history,
     // duplicated raw cover photos, embedded card-crop images) from data
@@ -1348,6 +1408,8 @@ function tryBackgroundDriveMigration(){
           lastResetDate = data.lastResetDate || '';
           window.calendarArchive = data.calendarArchive || [];
           readyRoutines = data.readyRoutines || [];
+          timerCardCover = data.timerCardCover || null;
+      focusedActionId = data.focusedActionId || null;
           await migrateLegacyBloat();
           renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView(); renderTodos();
         }
@@ -1369,7 +1431,7 @@ async function driveInit(){ return; }
 const LIVE_FILE_NAME = 'Xperiencer Data.json';
 
 function driveBuildPayload(){
-  return JSON.stringify({ events, schedules, routines, todos, todoSeqCounter, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines });
+  return JSON.stringify({ events, schedules, routines, todos, todoSeqCounter, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines, timerCardCover, focusedActionId });
 }
 
 // One-time cleanup for data saved before this cleanup existed:
@@ -1540,6 +1602,8 @@ async function restoreFromDriveBackup(){
         lastResetDate = data.lastResetDate || '';
         window.calendarArchive = data.calendarArchive || [];
         readyRoutines = data.readyRoutines || [];
+        timerCardCover = data.timerCardCover || null;
+      focusedActionId = data.focusedActionId || null;
 
         await migrateLegacyBloat();
         const saved = await driveSaveData();
@@ -1613,6 +1677,11 @@ let completions = {};
 let deletionLog = [];
 let schFilterScheduleOnly = false;
 let actionListIds = [];
+let nextActionTimestamp = null;
+let nextActionTitle = '';
+let timerCardCover = null;
+let focusedActionId = null;
+let lastActionItems = [];
 let readyRoutines = [];
 let doneSchedules = {};
 let adjustedDeadlines = {}; // keyed by `${sourceId}_${date}` -> adjusted duration (minutes) for that occurrence
@@ -1667,6 +1736,7 @@ function nowTimeStr(){
   return String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
 }
 function dsToDate(s){const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)}
+function weekdayShort(dateStr){if(!dateStr)return'';return dsToDate(dateStr).toLocaleDateString('en-US',{weekday:'short'})}
 function eventCalDate(e){
   if(e.date) return e.date;
   if(e.createdAt) return e.createdAt.slice(0,10);
@@ -2070,6 +2140,129 @@ function renderQuotesPicks(quoteItems, buildEventCardHTML, loadCardCovers){
   loadCardCovers(picks, 'quotes-picks-');
 }
 
+function openTimerCoverSheet(){
+  document.getElementById('timer-remove-cover-btn').style.display = timerCardCover ? 'block' : 'none';
+  document.getElementById('timer-remove-cover-divider').style.display = timerCardCover ? 'block' : 'none';
+  document.getElementById('timer-cover-overlay').classList.add('open');
+}
+
+async function timerCardSetCover(input){
+  if(!input.files || !input.files[0]) return;
+  document.getElementById('timer-cover-overlay').classList.remove('open');
+  const reader = new FileReader();
+  reader.onload = async function(ev){
+    try{
+      const url = await cloudinaryUploadImage(ev.target.result);
+      timerCardCover = url;
+      await driveSaveData();
+      renderEvents();
+      showToast('Timer card cover set ✓');
+    }catch(err){
+      console.error('Timer card cover upload failed:', err);
+      showToast('Cover upload failed');
+    }
+  };
+  reader.readAsDataURL(input.files[0]);
+  input.value = '';
+}
+
+async function timerCardRemoveCover(){
+  timerCardCover = null;
+  document.getElementById('timer-cover-overlay').classList.remove('open');
+  await driveSaveData();
+  renderEvents();
+  showToast('Cover removed');
+}
+
+// ── Focus-event picker (hold on the timer card) ──
+function openTimerFocusSheet(){
+  const listEl = document.getElementById('timer-focus-list');
+  const items = lastActionItems || [];
+  const rows = [`<div class="nd-drop-item" style="width:100%" onclick="setTimerFocus(null)">
+      ${focusedActionId?'':'✓ '}Auto (next up)
+    </div>`];
+  items.forEach(e=>{
+    const wd = weekdayShort(e.date);
+    const when = e.date===todayStr() ? 'Today, '+wd : (wd+', '+e.date);
+    rows.push(`<div class="nd-drop-item" style="width:100%" onclick="setTimerFocus('${e.id}')">
+        ${focusedActionId===e.id?'✓ ':''}${esc(e.title||'Untitled')} <span style="opacity:.6;font-weight:400">— ${when}${e.time?' at '+fmtTime(e.time):''}</span>
+      </div>`);
+  });
+  listEl.innerHTML = rows.join('');
+  document.getElementById('timer-focus-overlay').classList.add('open');
+}
+
+function setTimerFocus(id){
+  focusedActionId = id;
+  document.getElementById('timer-focus-overlay').classList.remove('open');
+  driveSaveData();
+  renderEvents();
+}
+
+// Long-press (600ms) on the timer card opens the focus-event picker.
+// Delegated on the scroll container since the card is re-rendered often.
+(function(){
+  let pressTimer = null;
+  const container = document.getElementById('events-list');
+  if(!container) return;
+  const start = (e)=>{
+    const card = e.target.closest('#live-clock-card');
+    if(!card) return;
+    pressTimer = setTimeout(()=>openTimerFocusSheet(), 600);
+  };
+  const cancel = ()=>{ clearTimeout(pressTimer); };
+  container.addEventListener('touchstart', start, {passive:true});
+  container.addEventListener('touchend', cancel, {passive:true});
+  container.addEventListener('touchmove', cancel, {passive:true});
+  container.addEventListener('mousedown', start);
+  container.addEventListener('mouseup', cancel);
+  container.addEventListener('mouseleave', cancel);
+})();
+
+function updateLiveClockCard(){
+  const timeEl = document.getElementById('live-clock-time');
+  if(!timeEl) return;
+  const now = new Date();
+  const h24 = now.getHours();
+  const h12 = h24%12 || 12;
+  const m = p2(now.getMinutes()), s = p2(now.getSeconds());
+  timeEl.textContent = `${h12}:${m}:${s}`;
+  const ampmEl = document.getElementById('live-clock-ampm');
+  if(ampmEl) ampmEl.textContent = h24 < 12 ? 'AM' : 'PM';
+  const dateEl = document.getElementById('live-clock-date');
+  if(dateEl){
+    dateEl.textContent = now.toLocaleDateString('en-US',{weekday:'short',day:'numeric',month:'short'});
+  }
+  const timerEl = document.getElementById('live-clock-timer');
+  const titleEl = document.getElementById('live-clock-title-row');
+  if(timerEl && titleEl){
+    if(nextActionTimestamp==null){
+      timerEl.textContent = '';
+      titleEl.innerHTML = 'No upcoming items';
+    } else {
+      const diffMs = nextActionTimestamp - now.getTime();
+      if(diffMs <= 0){
+        timerEl.textContent = '';
+        titleEl.innerHTML = `<b>${esc(nextActionTitle)}</b> is now`;
+      } else {
+        const totalSec = Math.floor(diffMs/1000);
+        const dd = Math.floor(totalSec/86400);
+        const hh = Math.floor((totalSec%86400)/3600);
+        const mm = Math.floor((totalSec%3600)/60);
+        const ss = totalSec%60;
+        const parts = [];
+        if(dd) parts.push(dd+'d');
+        if(dd||hh) parts.push(hh+'h');
+        if(dd||hh||mm) parts.push(mm+'m');
+        parts.push(ss+'s');
+        timerEl.textContent = parts.join(' ');
+        titleEl.innerHTML = `until "${esc(nextActionTitle)}"`;
+      }
+    }
+  }
+}
+setInterval(updateLiveClockCard, 1000);
+
 function renderEvents(){
   const today = todayStr();
 
@@ -2160,13 +2353,14 @@ function renderEvents(){
     const tags=(e.tag||'').split(' ').filter(Boolean);
     const timeLbl=e.date?(()=>{
       const today = todayStr();
-      if(e.date === today) return 'Today'+(e.time?' at '+fmtTime(e.time):'');
+      const wd = weekdayShort(e.date);
+      if(e.date === today) return 'Today, '+wd+(e.time?' at '+fmtTime(e.time):'');
       const d = dsToDate(e.date);
       const t = dsToDate(today);
       const diff = Math.round((d - t) / (1000*60*60*24));
-      if(diff===1) return 'Tomorrow'+(e.time?' at '+fmtTime(e.time):'');
-      if(diff===-1) return 'Yesterday';
-      return e.date+(e.time?' · '+fmtTime(e.time):'');
+      if(diff===1) return 'Tomorrow, '+wd+(e.time?' at '+fmtTime(e.time):'');
+      if(diff===-1) return 'Yesterday, '+wd;
+      return e.date+' ('+wd+')'+(e.time?' · '+fmtTime(e.time):'');
     })():'';
     const clickFn = e._source==='schedule'
       ? `handleSchRtTap('${e.id}','schedule')`
@@ -2232,14 +2426,46 @@ function renderEvents(){
   // nothing else needs touching.
   function loadCardCovers(items, idPrefix){ /* intentionally empty */ }
 
+  // ── Live clock / next-up countdown card (pinned first, action list only) ──
+  lastActionItems = eTab==='closed' ? [] : actionItems;
+  let focusItem = null;
+  if(eTab!=='closed' && actionItems.length){
+    if(focusedActionId){
+      focusItem = actionItems.find(e=>e.id===focusedActionId) || null;
+      if(!focusItem){ focusedActionId = null; driveSaveData(); } // pinned item gone — fall back to auto, persist the clear
+    }
+    if(!focusItem) focusItem = actionItems[0];
+  }
+  nextActionTimestamp = null;
+  if(focusItem && focusItem.date){
+    const d = dsToDate(focusItem.date);
+    const mins = tlTimeToMin(focusItem.time);
+    d.setHours(Math.floor(mins/60), mins%60, 0, 0);
+    nextActionTimestamp = d.getTime();
+  }
+  nextActionTitle = focusItem ? (focusItem.title||'Untitled') : '';
+
+  const clockCoverStyle = timerCardCover ? ` style="background-image:url('${timerCardCover}');background-size:cover;background-position:center"` : '';
+  const clockCardHTML = eTab==='closed' ? '' : `<div class="ev-clock-card${timerCardCover?' has-cover':''}" id="live-clock-card"${clockCoverStyle} ondblclick="openTimerCoverSheet()">
+      <div class="ev-clock-mid">
+        <div class="ev-clock-time"><span id="live-clock-time">--:--:--</span><span class="ev-clock-ampm" id="live-clock-ampm"></span></div>
+        <div class="ev-clock-date" id="live-clock-date">--</div>
+      </div>
+      <div class="ev-clock-next" id="live-clock-next">
+        <div class="ev-clock-timer" id="live-clock-timer"></div>
+        <div class="ev-clock-title-row" id="live-clock-title-row">No upcoming items</div>
+      </div>
+    </div>`;
+
   if(!actionItems.length){
-    el.innerHTML='';
-    if(emptyEl) emptyEl.style.display='flex';
+    el.innerHTML = clockCardHTML;
+    if(emptyEl) emptyEl.style.display= eTab==='closed' ? 'flex' : 'none';
   } else {
     if(emptyEl) emptyEl.style.display='none';
-    el.innerHTML = actionItems.map(e=>buildEventCardHTML(e,'ev-hcard-')).join('');
+    el.innerHTML = clockCardHTML + actionItems.map(e=>buildEventCardHTML(e,'ev-hcard-')).join('');
     loadCardCovers(actionItems, 'ev-hcard-');
   }
+  updateLiveClockCard();
 
   // ── EVENTS LIST: every open event, dated or undated, newest-updated first ──
   const openEventItems = evItems
@@ -3625,6 +3851,7 @@ document.getElementById('rt-title').addEventListener('keydown',e=>{if(e.key==='E
 // ══════════════════════════════════════
 let ndEventId = null;
 let ndItemSource = 'event'; // 'event' | 'schedule' | 'routine'
+let galleryTarget = 'note'; // 'note' | 'timer' — which picker consumes the next gallery selection
 // Tracks whether the currently-open note was actually edited (set only by
 // ndAutoSave, which runs on real keystrokes/toggles). closeNoteDetail uses
 // this to skip the Drive upload entirely when the note was just viewed.
@@ -4945,8 +5172,19 @@ function closeAppGallery(){
 }
 
 async function selectGalleryImage(coverUrl){
-  if(!ndEventId || !coverUrl) return;
+  if(!coverUrl) return;
   closeAppGallery();
+
+  if(galleryTarget === 'timer'){
+    timerCardCover = coverUrl;
+    await driveSaveData();
+    renderEvents();
+    showToast('Timer card cover set ✓');
+    galleryTarget = 'note';
+    return;
+  }
+
+  if(!ndEventId) return;
 
   // Reusing a past cover just means copying the same Cloudinary URL onto
   // this item too — no shared-file bookkeeping needed since Cloudinary
