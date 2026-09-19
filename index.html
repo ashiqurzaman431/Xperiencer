@@ -12,8 +12,6 @@
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://apis.google.com/js/api.js" async defer></script>
 <script type="module">
   // Firebase SDK — loaded via CDN (no build step / bundler needed, matches
   // the rest of this single-file app). Exposes what we need on window so
@@ -705,11 +703,9 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
         <div style="font-size:12px;color:var(--text-sec);display:flex;align-items:center;gap:8px">
           Xperiencer
           <button onclick="signOut()" style="background:none;border:none;font-size:10px;color:var(--text-dim);cursor:pointer;padding:0;font-family:inherit;font-weight:700">Sign out</button>
-          <button onclick="restoreFromDriveBackup()" style="background:none;border:none;font-size:10px;color:var(--amber);cursor:pointer;padding:0;font-family:inherit;font-weight:700">Restore from Drive</button>
         </div>
         <div style="font-size:22px;font-weight:800;color:var(--text-pri)">Events</div>
       </div>
-      <button onclick="openEventSheet()" style="background:var(--bg-card2);border:1px solid var(--border);border-radius:10px;padding:8px 14px;color:var(--text-sec);font-size:12px;font-weight:700;cursor:pointer">+ New</button>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;padding:0 4px">
       <div class="tab-row" style="margin-bottom:0">
@@ -1287,23 +1283,11 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
 </div>
 
 <script>
-// ══════════════════════════════════════
-// GOOGLE CONFIG
-// ══════════════════════════════════════
-const GOOGLE_CLIENT_ID = '787576428605-c5f1tccfclupnnd9og87j9g8kapio4vs.apps.googleusercontent.com';
-const GOOGLE_API_KEY   = 'AIzaSyDeA7wNouqNYmSlDwddGNcUtQ7zh7F80z0';
-const DRIVE_FOLDER_NAME = 'Xperiencer Data';
-const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email';
-
-let driveAccessToken = null;
-let driveFolderId    = null;
-let driveDataFileId  = null;
-let driveTokenClient = null;
-// Count of Drive saves currently in flight — used to warn before the tab
+// Count of cloud saves currently in flight — used to warn before the tab
 // closes mid-upload (see the beforeunload listener further down).
 let driveSaveInFlight = 0;
 
-// Warn before closing/reloading the tab while a Drive upload is still in
+// Warn before closing/reloading the tab while a save is still in
 // flight, so an edit doesn't get lost mid-save.
 window.addEventListener('beforeunload', (e) => {
   if(driveSaveInFlight > 0){
@@ -1397,58 +1381,6 @@ async function loginWithGoogle(){
   localStorage.setItem('ll_authMode','google');
   showToast('Signed in!');
   await enterApp();
-  // Background Drive migration is no longer auto-triggered — it relied on
-  // a silent popup that browsers block anyway, and RTDB is now the
-  // confirmed working source of truth. tryBackgroundDriveMigration() is
-  // still defined below if a manual "restore from old Drive backup"
-  // button is ever wanted later.
-}
-
-// Best-effort, non-blocking: after Firebase Auth confirms identity, try a
-// silent (no popup/prompt) Drive token grant purely to enable the one-time
-// Drive→RTDB migration in driveLoadLatestData(). If this fails or is
-// declined, nothing breaks — it just means an existing user's old Drive
-// data won't auto-migrate until they explicitly reconnect. New data always
-// flows through RTDB regardless.
-function tryBackgroundDriveMigration(){
-  if(typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2){
-    setTimeout(tryBackgroundDriveMigration, 150);
-    return;
-  }
-  try{
-    const silentClient = google.accounts.oauth2.initTokenClient({
-      client_id: GOOGLE_CLIENT_ID,
-      scope: DRIVE_SCOPES,
-      callback: async (tokenResponse) => {
-        if(tokenResponse.error) return; // silent failure is fine, not user-facing
-        driveAccessToken = tokenResponse.access_token;
-        await driveInit();
-        const data = await driveLoadLatestData();
-        if(data && (!events.length && !schedules.length && !routines.length)){
-          events      = data.events      || [];
-          schedules   = data.schedules   || [];
-          routines    = data.routines    || [];
-          todos       = data.todos       || [];
-          todoSeqCounter = data.todoSeqCounter || 0;
-          completions = data.completions || {};
-          deletionLog = data.deletionLog || [];
-          doneSchedules = data.doneSchedules || {};
-          adjustedDeadlines = data.adjustedDeadlines || {};
-          lastResetDate = data.lastResetDate || '';
-          window.calendarArchive = data.calendarArchive || [];
-          readyRoutines = data.readyRoutines || [];
-          timerCardCover = data.timerCardCover || null;
-      focusedActionId = data.focusedActionId || null;
-          tagCovers = data.tagCovers || {};
-          await migrateLegacyBloat();
-          renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView(); renderTodos();
-        }
-      }
-    });
-    silentClient.requestAccessToken({ prompt: '' });
-  }catch(err){
-    console.warn('Background Drive migration attempt failed:', err);
-  }
 }
 
 // ══════════════════════════════════════
@@ -1457,8 +1389,6 @@ function tryBackgroundDriveMigration(){
 // RTDB needs no folder/file setup the way Drive did — kept as a no-op
 // under the old name so the ~30 existing call sites don't need touching.
 async function driveInit(){ return; }
-
-const LIVE_FILE_NAME = 'Xperiencer Data.json';
 
 function driveBuildPayload(){
   return JSON.stringify({ events, schedules, routines, todos, todoSeqCounter, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines, timerCardCover, focusedActionId, tagCovers });
@@ -1544,114 +1474,13 @@ async function driveSaveData(){
 }
 
 // Loads app data from Firebase RTDB. Kept under the old name so the
-// existing enterApp()/reconnect call sites don't need touching.
-// One-time migration: if RTDB has nothing yet but an old Drive live file
-// exists (and Drive access happens to still be available this session),
-// pull it once so existing users don't lose data on first switch-over.
+// existing enterApp() call site doesn't need touching.
 async function driveLoadLatestData(){
   if(!firebaseUid) return null;
   const rtdbData = await window.firebaseLoadUserData(firebaseUid);
-  if(rtdbData) return rtdbData;
-
-  if(driveAccessToken && driveFolderId){
-    try{
-      const liveRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name = '${LIVE_FILE_NAME}' and mimeType='application/json' and trashed=false&fields=files(id,name)&pageSize=1`,
-        { headers: { Authorization: 'Bearer ' + driveAccessToken } }
-      );
-      const liveData = await liveRes.json();
-      if(liveData.files && liveData.files.length){
-        const fileRes = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${liveData.files[0].id}?alt=media`,
-          { headers: { Authorization: 'Bearer ' + driveAccessToken } }
-        );
-        const migrated = await fileRes.json();
-        if(migrated){
-          await window.firebaseSaveUserData(firebaseUid, migrated);
-          showToast('Migrated your old Drive data ✓');
-          return migrated;
-        }
-      }
-    } catch(err){
-      console.warn('Drive migration fallback failed:', err);
-    }
-  }
-  return null;
+  return rtdbData || null;
 }
 
-// Manual, click-triggered recovery: pulls the old Xperiencer Data.json
-// straight from Drive and overwrites current RTDB state with it. Called
-// directly from a button tap (not from inside another async callback) so
-// the Drive OAuth popup isn't blocked the way the old silent background
-// attempt was.
-async function restoreFromDriveBackup(){
-  if(!confirm('This will REPLACE your current data with whatever is saved in your old Google Drive backup. Continue?')) return;
-  driveTokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: GOOGLE_CLIENT_ID,
-    scope: DRIVE_SCOPES,
-    callback: async (tokenResponse) => {
-      if(tokenResponse.error){ showToast('Drive connection failed: ' + tokenResponse.error); return; }
-      driveAccessToken = tokenResponse.access_token;
-      showToast('Searching Drive for your backup…');
-      try{
-        const searchRes = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q=name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`,
-          { headers: { Authorization: 'Bearer ' + driveAccessToken } }
-        );
-        const searchData = await searchRes.json();
-        if(!searchData.files || !searchData.files.length){
-          showToast('No Drive backup folder found');
-          return;
-        }
-        driveFolderId = searchData.files[0].id;
-        const liveRes = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q='${driveFolderId}' in parents and name = '${LIVE_FILE_NAME}' and mimeType='application/json' and trashed=false&fields=files(id,name)&pageSize=1`,
-          { headers: { Authorization: 'Bearer ' + driveAccessToken } }
-        );
-        const liveData = await liveRes.json();
-        if(!liveData.files || !liveData.files.length){
-          showToast('No backup file found in Drive');
-          return;
-        }
-        const fileRes = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${liveData.files[0].id}?alt=media`,
-          { headers: { Authorization: 'Bearer ' + driveAccessToken } }
-        );
-        const data = await fileRes.json();
-        if(!data){ showToast('Backup file was empty'); return; }
-
-        events      = data.events      || [];
-        schedules   = data.schedules   || [];
-        routines    = data.routines    || [];
-        todos       = data.todos       || [];
-        todoSeqCounter = data.todoSeqCounter || 0;
-        completions = data.completions || {};
-        deletionLog = data.deletionLog || [];
-        doneSchedules = data.doneSchedules || {};
-        adjustedDeadlines = data.adjustedDeadlines || {};
-        lastResetDate = data.lastResetDate || '';
-        window.calendarArchive = data.calendarArchive || [];
-        readyRoutines = data.readyRoutines || [];
-        timerCardCover = data.timerCardCover || null;
-      focusedActionId = data.focusedActionId || null;
-        tagCovers = data.tagCovers || {};
-
-        await migrateLegacyBloat();
-        const saved = await driveSaveData();
-        if(saved){
-          showToast(`Restored ✓ (${events.length} events, ${schedules.length} schedules, ${routines.length} routines)`);
-        } else {
-          showToast('Restored locally, but saving to RTDB failed — try again');
-        }
-        renderEvents(); renderSchStrip(); renderSchedule(); renderRoutine(); renderCalView();
-      } catch(err){
-        showToast('Restore failed — check console');
-        console.error('Drive restore failed:', err);
-      }
-    }
-  });
-  driveTokenClient.requestAccessToken();
-}
 // ── Cloudinary (unsigned upload) — replaces Drive for cover images ──
 // Deletion isn't available client-side (Cloudinary requires a signed
 // request with the API secret for deletes, which can never live in
@@ -1733,6 +1562,11 @@ let rtScrollTimer        = null;
 let curView   = 'events';
 let eTab      = 'all';
 let allSearchQuery = '';
+// All List pagination: shows 24 at a time, "Load more events" adds 24 more.
+const ALL_LIST_PAGE_SIZE = 24;
+let allListVisible = ALL_LIST_PAGE_SIZE;   // how many All List cards are currently shown
+let allListItems = [];                     // full filtered+sorted list (search runs over ALL of these)
+let allListCardBuilder = null;             // set by renderEvents() (buildEventCardHTML lives inside it)
 let editingEv = null;
 let editingSc = null;
 let reschedulingSc = null; // {id, oldDate} when rescheduling a missed schedule
@@ -2095,7 +1929,39 @@ function switchETab(t){
 
 function onAllSearchInput(v){
   allSearchQuery = v.trim().toLowerCase();
+  allListVisible = ALL_LIST_PAGE_SIZE; // new search starts back at the first 24 results
   renderEvents();
+}
+
+// ── ALL LIST: paginated grid (24 at a time) ──
+function allListMoreHTML(){
+  const left = allListItems.length - allListVisible;
+  if(left <= 0) return '';
+  return `<button id="ev-all-more" onclick="loadMoreAllEvents()" style="grid-column:1/-1;background:var(--bg-card2);border:1px solid var(--border);border-radius:12px;padding:13px;color:var(--text-sec);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Load more events (${left} left)</button>`;
+}
+
+function renderAllGrid(){
+  const gridEl = document.getElementById('ev-all-grid');
+  if(!gridEl || !allListCardBuilder) return;
+  if(!allListItems.length){
+    gridEl.innerHTML = `<div style="grid-column:1/-1;padding:40px 0;text-align:center;color:var(--text-dim);font-size:13px">Nothing here yet.</div>`;
+    return;
+  }
+  gridEl.innerHTML = allListItems.slice(0, allListVisible)
+    .map(e=>allListCardBuilder(e,'ev-all-hcard-')).join('') + allListMoreHTML();
+}
+
+// Appends the next 24 cards in place (doesn't re-render the whole Events
+// tab, so the horizontal strips above keep their scroll position).
+function loadMoreAllEvents(){
+  const gridEl = document.getElementById('ev-all-grid');
+  if(!gridEl || !allListCardBuilder) return;
+  const start = allListVisible;
+  allListVisible += ALL_LIST_PAGE_SIZE;
+  const oldBtn = document.getElementById('ev-all-more');
+  if(oldBtn) oldBtn.remove();
+  gridEl.insertAdjacentHTML('beforeend',
+    allListItems.slice(start, allListVisible).map(e=>allListCardBuilder(e,'ev-all-hcard-')).join('') + allListMoreHTML());
 }
 
 // ── QUOTE DISPLAY: one quote per session, no repeats until every quote has shown once ──
@@ -2569,15 +2435,10 @@ function renderEvents(){
     });
   }
 
-  const gridEl = document.getElementById('ev-all-grid');
-  if(gridEl){
-    if(!allItems.length){
-      gridEl.innerHTML = `<div style="grid-column:1/-1;padding:40px 0;text-align:center;color:var(--text-dim);font-size:13px">Nothing here yet.</div>`;
-    } else {
-      gridEl.innerHTML = allItems.map(e=>buildEventCardHTML(e,'ev-all-hcard-')).join('');
-      loadCardCovers(allItems, 'ev-all-hcard-');
-    }
-  }
+  // Search runs over ALL items above; only the first `allListVisible` are drawn.
+  allListItems = allItems;
+  allListCardBuilder = buildEventCardHTML;
+  renderAllGrid();
 
   // ── QUOTES: pull all quote-type events, feed Quote Display + Quotes Picks ──
   const quoteItems = evItems.filter(e=>(e.openState||'open')==='quote');
@@ -2688,7 +2549,7 @@ async function saveEvent(){
   }
 
   if(editingEv){events=events.map(e=>e.id===editingEv?obj:e);}
-  else events.unshift(obj);
+  else { events.unshift(obj); allListVisible++; }
   document.getElementById('event-overlay').classList.remove('open');
   renderEvents(); renderCalView();
   showToast(editingEv?'Event updated':'Event saved');
@@ -3940,10 +3801,8 @@ async function showUploadToast(label){
   
 function signOut(){
   if(window.firebaseReady) window.firebaseSignOut().catch(()=>{});
-  driveAccessToken = null;
-  driveFolderId    = null;
-  driveDataFileId  = null;
   firebaseUid = null;
+  allListVisible = ALL_LIST_PAGE_SIZE;
   events = []; schedules = []; routines = []; completions = {};
   localStorage.removeItem('ll_authMode');
   document.getElementById('app').style.display = 'none';
@@ -4202,6 +4061,7 @@ function ndAutoSaveTodoDraft(){
     fromTodoId: ndTodoDraft.todoId
   };
   events.unshift(obj);
+  allListVisible++;
   ndEventId = obj.id;
   ndItemSource = 'event';
   ndDirty = true;
@@ -4322,6 +4182,7 @@ async function ndDuplicate(){
     updatedAt: new Date().toISOString()
   });
   events.unshift(copy);
+  allListVisible++;
   await driveSaveData();
   closeNoteDetail();
   renderEvents();
