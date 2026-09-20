@@ -24,7 +24,7 @@
   // (see waitForFirebase() in the main script block) or it'll fail with
   // "is not a function".
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, reauthenticateWithPopup }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
   import { getDatabase, ref, set, get }
     from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
@@ -57,6 +57,23 @@
   window.firebaseLoadUserData = async (uid) => {
     const snap = await get(ref(fbDb, 'users/' + uid + '/data'));
     return snap.exists() ? snap.val() : null;
+  };
+  // Dedicated Calendar authorization flow — separate from normal login.
+  // Reauthenticates the ALREADY-signed-in Google user with the extra
+  // calendar scope via a popup (same trusted-gesture requirement as
+  // firebaseSignIn: must be called directly from a click handler) and
+  // returns the OAuth access token to the caller. This module never
+  // stores the token anywhere — the caller (main script) keeps it in a
+  // plain JS variable only, never in Firebase/localStorage/sessionStorage.
+  window.firebaseConnectCalendar = async () => {
+    const user = fbAuth.currentUser;
+    if(!user) throw new Error('not-signed-in');
+    const provider = new GoogleAuthProvider();
+    provider.addScope('https://www.googleapis.com/auth/calendar.events.owned');
+    const result = await reauthenticateWithPopup(user, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if(!credential || !credential.accessToken) throw new Error('no-access-token');
+    return credential.accessToken;
   };
   // Signals that everything above is now defined and safe to call — this
   // module block executes AFTER classic inline <script> blocks elsewhere
@@ -829,6 +846,7 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
         <div style="font-size:12px;color:var(--text-sec);display:flex;align-items:center;gap:8px">
           Xperiencer
           <button onclick="signOut()" style="background:none;border:none;font-size:10px;color:var(--text-dim);cursor:pointer;padding:0;font-family:inherit;font-weight:700">Sign out</button>
+          <button id="cal-connect-btn" onclick="handleCalendarBtnClick()" style="background:none;border:none;font-size:10px;color:var(--text-dim);cursor:pointer;padding:0;font-family:inherit;font-weight:700;display:none">Connect Google Calendar</button>
         </div>
         <div style="font-size:22px;font-weight:800;color:var(--text-pri)">Events</div>
       </div>
@@ -1590,12 +1608,21 @@ async function enterApp(){
       tagCovers = data.tagCovers || {};
       routineValidity = (data.routineValidity && typeof data.routineValidity.validFrom==='string' && typeof data.routineValidity.validUntil==='string')
         ? {validFrom:data.routineValidity.validFrom, validUntil:data.routineValidity.validUntil} : null;
+      calendarSync = (data.calendarSync && typeof data.calendarSync==='object')
+        ? Object.assign({on:false, since:null, remind:[10]}, data.calendarSync) : {on:false, since:null, remind:[10]};
     }
     // One-time cleanup of legacy embedded data (old note-version history,
     // duplicated raw cover photos, embedded card-crop images) from data
     // saved before this cleanup existed. No-ops once already clean.
     await migrateLegacyBloat();
   }
+  // Calendar reconciliation is gated on this — it must never run against
+  // data that hasn't actually finished loading (guest mode has nothing to
+  // load, so it's set true immediately; Google mode sets it true only
+  // after the block above has fully run).
+  calSyncInvalidated = false;
+  appDataLoaded = true;
+  renderCalendarConnectBtn();
   checkDailyReset();
   quoteDisplayPickId = null; // entering the app = a new open: draw a fresh quote
   schSelDate = todayStr();
@@ -1624,6 +1651,30 @@ function loginAsGuest(){
 // resolves. Used to key the RTDB data path (users/<uid>/data). Null while
 // signed out or in guest mode.
 let firebaseUid = null;
+
+// ══════════════════════════════════════
+// CALENDAR SYNC — runtime (memory-only) state
+// ══════════════════════════════════════
+// The Google Calendar OAuth access token. NEVER written to Firebase,
+// localStorage, sessionStorage, or anywhere else persistent — it lives
+// only in this variable and is lost on refresh/sign-out by design.
+// null whenever Calendar isn't currently usable (disconnected, expired,
+// not yet connected this session).
+let calAccessToken = null;
+// True once the current app session has finished loading Firebase data
+// (or is guest mode, which has nothing to load). Calendar reconciliation
+// refuses to run until this is true, so it can never mistake the empty
+// pre-load state for "the user deleted everything."
+let appDataLoaded = false;
+// Set true during sign-out and checked by the reconciliation pipeline so
+// an in-flight run started just before sign-out can't act on the
+// now-cleared in-memory arrays as if they were the real (empty) state.
+let calSyncInvalidated = false;
+let calReconcileTimer = null;
+let calReconcileInFlight = false;
+let calReconcileQueued = false;
+// Bounded backoff counter for 429 responses — reset on any non-429 run.
+let calBackoffUntil = 0;
 
 // Polls until the Firebase module script (deferred, loads after this
 // classic script block) has finished defining window.firebase* functions.
@@ -1664,7 +1715,7 @@ async function loginWithGoogle(){
 async function driveInit(){ return; }
 
 function driveBuildPayload(){
-  return JSON.stringify({ events, schedules, routines, todos, todoSeqCounter, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines, timerCardCover, focusedActionId, tagCovers, routineValidity });
+  return JSON.stringify({ events, schedules, routines, todos, todoSeqCounter, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines, timerCardCover, focusedActionId, tagCovers, routineValidity, calendarSync });
 }
 
 // One-time cleanup for data saved before this cleanup existed:
@@ -1825,6 +1876,11 @@ function getTagDefaultCover(tagStr){
   return null;
 }
 let readyRoutines = [];
+// Minimal persisted Google Calendar connection state (see CALENDAR SYNC
+// section near the bottom of the file). The OAuth access token itself is
+// NEVER part of this object — it lives only in the in-memory calAccessToken
+// variable and is re-obtained via connectGoogleCalendar() when needed.
+let calendarSync = {on:false, since:null, remind:[10]};
 // Global Routine Validity Period (NOT per-routine): {validFrom:'YYYY-MM-DD', validUntil:'YYYY-MM-DD'} | null.
 // Inclusive calendar dates. null = never set (legacy behaviour: routines are not date-limited).
 let routineValidity = null;
@@ -3703,6 +3759,7 @@ async function saveSchedule(){
   renderEvents();
   runAlertCheck();
   driveSaveData();
+  scheduleCalReconcile();
 }
 
 async function deleteSchedule(){
@@ -3713,6 +3770,7 @@ async function deleteSchedule(){
   renderSchStrip();renderSchedule();renderCalView();
   showToast('Schedule deleted');
   renderEvents();
+  scheduleCalReconcile();
 }
 
 // ══════════════════════════════════════
@@ -4132,6 +4190,7 @@ function closeSchRtCard(id, source, occDate){
   renderEvents();
   runAlertCheck();
   showToast('Marked done');
+  if(source==='schedule') scheduleCalReconcile();
 }
 
 let lcPending = null; // {id, source, occDate, avail}
@@ -4211,6 +4270,7 @@ function markScheduleDone(id){
   renderSchedule();
   renderEvents();
   driveSaveData();
+  scheduleCalReconcile();
 }
 
 function toggleSchFilter(){
@@ -4629,7 +4689,234 @@ async function showUploadToast(label){
   }
 }
   
+// ══════════════════════════════════════
+// CALENDAR SYNC — Google Calendar integration (Phase 1 & 2)
+// One-way: Xperiencer → Google Calendar. Xperiencer remains the source of
+// truth; Google Calendar is only the external reminder engine. Only exact
+// (non-estimated) schedules are synced — see calDesiredEventBody() etc.
+// ══════════════════════════════════════
+
+function calIanaZone(){
+  try{ return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; }
+  catch(e){ return 'UTC'; }
+}
+
+function calAuthValid(){ return !!calAccessToken; }
+
+// Every one of these must hold before ANY create/patch/delete call is
+// allowed to run — see the sign-out safety comments in signOut() above.
+function calReconcileSafe(){
+  return !!firebaseUid
+    && getAuthMode()==='google'
+    && !!calendarSync.on
+    && calAuthValid()
+    && appDataLoaded
+    && !calSyncInvalidated;
+}
+
+function renderCalendarConnectBtn(){
+  const btn = document.getElementById('cal-connect-btn');
+  if(!btn) return;
+  if(getAuthMode()!=='google' || !firebaseUid){ btn.style.display='none'; return; }
+  btn.style.display = 'inline';
+  if(!calendarSync.on){
+    btn.textContent = 'Connect Google Calendar';
+    btn.style.color = 'var(--text-dim)';
+  } else if(calAuthValid()){
+    btn.textContent = 'Google Calendar connected';
+    btn.style.color = 'var(--lime)';
+  } else {
+    btn.textContent = 'Reconnect Google Calendar';
+    btn.style.color = '#f5c842';
+  }
+}
+
+function handleCalendarBtnClick(){
+  if(!calendarSync.on || !calAuthValid()) connectGoogleCalendar();
+}
+
+// Explicit user action ("Connect Google Calendar" / "Reconnect Google
+// Calendar"). Must run synchronously from the click handler above so the
+// popup counts as a trusted user gesture, same requirement as
+// loginWithGoogle()'s firebaseSignIn() call.
+async function connectGoogleCalendar(){
+  if(getAuthMode()!=='google' || !firebaseUid){ showToast('Sign in with Google first'); return; }
+  const wasOn = calendarSync.on;
+  try{
+    const token = await window.firebaseConnectCalendar();
+    calAccessToken = token;
+    calendarSync = Object.assign({}, calendarSync, {
+      on: true,
+      since: calendarSync.since || todayStr(),
+      remind: (calendarSync.remind && calendarSync.remind.length) ? calendarSync.remind : [10]
+    });
+    renderCalendarConnectBtn();
+    await driveSaveData();
+    showToast(wasOn ? 'Google Calendar reconnected' : 'Google Calendar connected');
+    scheduleCalReconcile(0); // backfill / catch up immediately
+  } catch(err){
+    console.warn('Calendar connect failed:', err);
+    const code = err && err.code;
+    if(code === 'auth/popup-closed-by-user'){ return; } // user backed out, not an error
+    showToast(code === 'auth/insufficient-permissions' ? 'Calendar permission was not granted' : 'Could not connect Google Calendar');
+    renderCalendarConnectBtn();
+  }
+}
+
+function calMarkExpired(){
+  calAccessToken = null;
+  renderCalendarConnectBtn();
+}
+
+// Debounced, single-flight trigger. Called ONLY from the specific
+// Calendar-relevant mutation points (exact-schedule save/delete, and a
+// schedule being marked done before its start) — never from every
+// driveSaveData() call site, so autosave/cover changes don't churn Calendar.
+function scheduleCalReconcile(delayMs){
+  if(!calReconcileSafe()) return;
+  clearTimeout(calReconcileTimer);
+  calReconcileTimer = setTimeout(runCalReconcile, delayMs===undefined ? 3000 : delayMs);
+}
+
+function calFetch(path, opts){
+  opts = opts || {};
+  return fetch('https://www.googleapis.com/calendar/v3/calendars/primary/' + path, Object.assign({}, opts, {
+    headers: Object.assign({'Authorization':'Bearer '+calAccessToken}, opts.headers||{})
+  }));
+}
+
+function calScheduleStartEnd(s){
+  const dur = (s.dur===''||s.dur==null||isNaN(s.dur)) ? 60 : +s.dur;
+  const {endDate, endTime} = computeEndFromStart(s.date, s.time, dur);
+  const tz = calIanaZone();
+  return {
+    start: {dateTime: s.date+'T'+s.time+':00', timeZone: tz},
+    end:   {dateTime: endDate+'T'+endTime+':00', timeZone: tz}
+  };
+}
+
+function calDesiredEventBody(s){
+  const {start, end} = calScheduleStartEnd(s);
+  return {
+    summary: s.title, start, end,
+    reminders: {useDefault:false, overrides:[{method:'popup', minutes:(calendarSync.remind&&calendarSync.remind[0])||10}]},
+    extendedProperties: {private: {xpr:'1', xprType:'schedule', xprId:s.id}}
+  };
+}
+
+// A schedule marked done BEFORE it was ever due to start is ineligible for
+// sync — its Calendar event/reminder must be removed and must not come
+// back on a later reconciliation pass.
+function calScheduleIneligible(s){
+  const key = s.id+'_'+s.date;
+  if(doneSchedules[key] !== true) return false;
+  const start = dsToDate(s.date);
+  const [h,m] = (s.time||'0:0').split(':').map(Number);
+  start.setHours(h,m,0,0);
+  return new Date() < start;
+}
+
+// Google event-ID restriction: lowercase letters a-v and digits 0-9 only,
+// 5-1024 chars. Our uid()s are digit-only, so this is a no-op sanitizer.
+function calEventId(scheduleId){ return 's'+String(scheduleId).replace(/[^a-v0-9]/gi,'').toLowerCase(); }
+
+async function runCalReconcile(){
+  if(calReconcileInFlight){ calReconcileQueued = true; return; }
+  if(Date.now() < calBackoffUntil){ scheduleCalReconcile(calBackoffUntil-Date.now()+250); return; }
+  if(!calReconcileSafe()) return;
+
+  calReconcileInFlight = true;
+  try{
+    const desired = new Map();
+    schedules.forEach(s=>{
+      if(s.isEstimated || !s.date || !s.time) return;
+      if(calScheduleIneligible(s)) return;
+      desired.set(s.id, s);
+    });
+
+    let res;
+    try{
+      res = await calFetch('events?privateExtendedProperty=' + encodeURIComponent('xpr=1') + '&showDeleted=false&singleEvents=true&maxResults=2500');
+    } catch(netErr){
+      return; // network failure — stay working, retry on next eligible pass
+    }
+
+    if(res.status === 401){ calMarkExpired(); return; }
+    if(res.status === 403){ showToast('Google Calendar permission problem — try reconnecting'); return; }
+    if(res.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
+    if(!res.ok) return;
+
+    const body = await res.json();
+    const actual = new Map();
+    (body.items||[]).forEach(ev=>{
+      const p = ev.extendedProperties && ev.extendedProperties.private;
+      if(p && p.xpr==='1' && p.xprType==='schedule' && p.xprId) actual.set(p.xprId, ev);
+    });
+
+    if(!calReconcileSafe()) return; // re-check right before anything destructive
+
+    // Defensive deletion threshold: a suspiciously-empty desired set next
+    // to a non-trivial number of Xperiencer-owned Calendar events is
+    // treated as a possible transitional/bug state, not a real mass
+    // deletion — skip the delete pass entirely this round.
+    const suspiciousEmpty = desired.size === 0 && actual.size > 3;
+    let attempts = 0, maxAttempts = 25;
+
+    for(const [id, s] of desired){
+      if(attempts++ >= maxAttempts) break;
+      if(!calReconcileSafe()) return;
+      const evId = calEventId(id);
+      const desiredBody = calDesiredEventBody(s);
+      const existing = actual.get(id);
+      if(!existing){
+        const cr = await calFetch('events', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(Object.assign({id:evId}, desiredBody))});
+        if(cr.status === 401){ calMarkExpired(); return; }
+        if(cr.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
+        if(cr.status === 409){
+          await calFetch('events/'+evId, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(desiredBody)}).catch(()=>{});
+        }
+        continue;
+      }
+      const needsPatch = existing.summary !== desiredBody.summary
+        || !existing.start || existing.start.dateTime !== desiredBody.start.dateTime || existing.start.timeZone !== desiredBody.start.timeZone
+        || !existing.end || existing.end.dateTime !== desiredBody.end.dateTime || existing.end.timeZone !== desiredBody.end.timeZone
+        || JSON.stringify((existing.reminders&&existing.reminders.overrides)||[]) !== JSON.stringify(desiredBody.reminders.overrides);
+      if(needsPatch){
+        const pr = await calFetch('events/'+evId, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(desiredBody)});
+        if(pr.status === 401){ calMarkExpired(); return; }
+        if(pr.status === 404){
+          await calFetch('events', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(Object.assign({id:evId}, desiredBody))}).catch(()=>{});
+        }
+        if(pr.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
+      }
+    }
+
+    if(!suspiciousEmpty){
+      for(const [id] of actual){
+        if(attempts++ >= maxAttempts) break;
+        if(desired.has(id)) continue;
+        if(!calReconcileSafe()) return;
+        const dr = await calFetch('events/'+calEventId(id), {method:'DELETE'});
+        if(dr.status === 401){ calMarkExpired(); return; }
+        if(dr.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
+      }
+    }
+  } finally{
+    calReconcileInFlight = false;
+    if(calReconcileQueued){ calReconcileQueued = false; scheduleCalReconcile(500); }
+  }
+}
+
 function signOut(){
+  // Calendar safety: invalidate BEFORE touching any in-memory data, so a
+  // reconciliation already in flight (or about to fire from the debounce
+  // timer) sees calSyncInvalidated=true on its next safety check and bails
+  // out instead of reading the empty arrays below as "everything got
+  // deleted, wipe Calendar too."
+  calSyncInvalidated = true;
+  appDataLoaded = false;
+  clearTimeout(calReconcileTimer);
+  calAccessToken = null;
   if(window.firebaseReady) window.firebaseSignOut().catch(()=>{});
   firebaseUid = null;
   allListVisible = ALL_LIST_PAGE_SIZE;
@@ -4637,6 +4924,7 @@ function signOut(){
   localStorage.removeItem('ll_authMode');
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-screen').classList.remove('hidden');
+  renderCalendarConnectBtn();
 }
 
 // Enter key shortcuts
