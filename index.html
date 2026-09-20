@@ -4773,16 +4773,64 @@ function calMarkExpired(){
 // schedule being marked done before its start) — never from every
 // driveSaveData() call site, so autosave/cover changes don't churn Calendar.
 function scheduleCalReconcile(delayMs){
+  // Calendar is supposed to be on but this session has no usable token
+  // (e.g. after a reload — the token is intentionally memory-only and
+  // never persisted). Previously this just returned silently; now it
+  // re-renders the existing Reconnect-state button so the user actually
+  // sees why nothing is syncing. No popup is opened automatically.
+  if(calendarSync.on && !calAuthValid() && firebaseUid && getAuthMode()==='google' && appDataLoaded && !calSyncInvalidated){
+    renderCalendarConnectBtn();
+    console.log('[Calendar] reconcile skipped: no access token this session — Reconnect required');
+    return;
+  }
   if(!calReconcileSafe()) return;
   clearTimeout(calReconcileTimer);
   calReconcileTimer = setTimeout(runCalReconcile, delayMs===undefined ? 3000 : delayMs);
 }
 
+// Every Calendar API request gets a client-side timeout so a hung
+// request (dead network, backgrounded-PWA fetch that never resolves,
+// Google-side stall) always settles one way or the other — this is what
+// guarantees runCalReconcile() always reaches its finally block and
+// releases calReconcileInFlight.
+const CAL_FETCH_TIMEOUT_MS = 15000;
 function calFetch(path, opts){
   opts = opts || {};
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), CAL_FETCH_TIMEOUT_MS);
   return fetch('https://www.googleapis.com/calendar/v3/calendars/primary/' + path, Object.assign({}, opts, {
+    signal: controller.signal,
     headers: Object.assign({'Authorization':'Bearer '+calAccessToken}, opts.headers||{})
-  }));
+  })).finally(()=>clearTimeout(timer));
+}
+
+// Wraps calFetch with uniform failure handling for abort/timeout/network
+// exceptions, so call sites never need their own try/catch. Returns the
+// Response on success, or null on any request-level failure (already
+// logged) — callers treat null as "stop this reconciliation pass safely,
+// try again on the next eligible trigger."
+async function calRequest(method, path, jsonBody){
+  const opts = {method};
+  if(jsonBody !== undefined){
+    opts.headers = {'Content-Type':'application/json'};
+    opts.body = JSON.stringify(jsonBody);
+  }
+  try{
+    return await calFetch(path, opts);
+  } catch(err){
+    const reason = (err && err.name === 'AbortError') ? 'timeout' : ((err && err.message) || 'network error');
+    console.log('[Calendar] request failed:', method, path, reason);
+    return null;
+  }
+}
+
+// True if a response was obtained but its status isn't one of the ones
+// reconciliation already understands (401/403/404/409/429/2xx). Logs the
+// details and the caller returns immediately without treating anything
+// as created/updated/deleted.
+function calLogUnexpected(res, method, path){
+  console.log('[Calendar] unexpected response:', method, path, 'status=', res.status);
+  res.text().then(t=>{ if(t) console.log('[Calendar] response body:', t.slice(0,500)); }).catch(()=>{});
 }
 
 function calScheduleStartEnd(s){
@@ -4821,11 +4869,16 @@ function calScheduleIneligible(s){
 function calEventId(scheduleId){ return 's'+String(scheduleId).replace(/[^a-v0-9]/gi,'').toLowerCase(); }
 
 async function runCalReconcile(){
-  if(calReconcileInFlight){ calReconcileQueued = true; return; }
+  if(calReconcileInFlight){
+    console.log('[Calendar] reconcile blocked: in flight');
+    calReconcileQueued = true;
+    return;
+  }
   if(Date.now() < calBackoffUntil){ scheduleCalReconcile(calBackoffUntil-Date.now()+250); return; }
   if(!calReconcileSafe()) return;
 
   calReconcileInFlight = true;
+  console.log('[Calendar] reconcile start');
   try{
     const desired = new Map();
     schedules.forEach(s=>{
@@ -4834,17 +4887,13 @@ async function runCalReconcile(){
       desired.set(s.id, s);
     });
 
-    let res;
-    try{
-      res = await calFetch('events?privateExtendedProperty=' + encodeURIComponent('xpr=1') + '&showDeleted=false&singleEvents=true&maxResults=2500');
-    } catch(netErr){
-      return; // network failure — stay working, retry on next eligible pass
-    }
+    const res = await calRequest('GET', 'events?privateExtendedProperty=' + encodeURIComponent('xpr=1') + '&showDeleted=false&singleEvents=true&maxResults=2500');
+    if(!res){ console.log('[Calendar] reconcile failed: could not list events'); return; } // abort/timeout/network — already logged by calRequest
 
     if(res.status === 401){ calMarkExpired(); return; }
     if(res.status === 403){ showToast('Google Calendar permission problem — try reconnecting'); return; }
     if(res.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
-    if(!res.ok) return;
+    if(!res.ok){ calLogUnexpected(res, 'GET', 'events'); return; }
 
     const body = await res.json();
     const actual = new Map();
@@ -4869,11 +4918,16 @@ async function runCalReconcile(){
       const desiredBody = calDesiredEventBody(s);
       const existing = actual.get(id);
       if(!existing){
-        const cr = await calFetch('events', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(Object.assign({id:evId}, desiredBody))});
+        const cr = await calRequest('POST', 'events', Object.assign({id:evId}, desiredBody));
+        if(!cr){ console.log('[Calendar] reconcile failed: create request did not complete for', evId); return; }
         if(cr.status === 401){ calMarkExpired(); return; }
         if(cr.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
-        if(cr.status === 409){
-          await calFetch('events/'+evId, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(desiredBody)}).catch(()=>{});
+        else if(cr.status === 409){
+          const pr2 = await calRequest('PATCH', 'events/'+evId, desiredBody);
+          if(pr2 && !pr2.ok && pr2.status!==401 && pr2.status!==429) calLogUnexpected(pr2, 'PATCH(recover 409)', 'events/'+evId);
+        } else if(!cr.ok){
+          calLogUnexpected(cr, 'POST', 'events');
+          return; // unexpected error — do not treat as success, stop this pass
         }
         continue;
       }
@@ -4882,12 +4936,17 @@ async function runCalReconcile(){
         || !existing.end || existing.end.dateTime !== desiredBody.end.dateTime || existing.end.timeZone !== desiredBody.end.timeZone
         || JSON.stringify((existing.reminders&&existing.reminders.overrides)||[]) !== JSON.stringify(desiredBody.reminders.overrides);
       if(needsPatch){
-        const pr = await calFetch('events/'+evId, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(desiredBody)});
+        const pr = await calRequest('PATCH', 'events/'+evId, desiredBody);
+        if(!pr){ console.log('[Calendar] reconcile failed: patch request did not complete for', evId); return; }
         if(pr.status === 401){ calMarkExpired(); return; }
-        if(pr.status === 404){
-          await calFetch('events', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(Object.assign({id:evId}, desiredBody))}).catch(()=>{});
-        }
         if(pr.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
+        else if(pr.status === 404){
+          const cr2 = await calRequest('POST', 'events', Object.assign({id:evId}, desiredBody));
+          if(cr2 && !cr2.ok && cr2.status!==401 && cr2.status!==429) calLogUnexpected(cr2, 'POST(recover 404)', 'events');
+        } else if(!pr.ok){
+          calLogUnexpected(pr, 'PATCH', 'events/'+evId);
+          return;
+        }
       }
     }
 
@@ -4896,11 +4955,24 @@ async function runCalReconcile(){
         if(attempts++ >= maxAttempts) break;
         if(desired.has(id)) continue;
         if(!calReconcileSafe()) return;
-        const dr = await calFetch('events/'+calEventId(id), {method:'DELETE'});
+        const dr = await calRequest('DELETE', 'events/'+calEventId(id));
+        if(!dr){ console.log('[Calendar] reconcile failed: delete request did not complete for', id); return; }
         if(dr.status === 401){ calMarkExpired(); return; }
         if(dr.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
+        else if(!dr.ok && dr.status!==404 && dr.status!==410){
+          // 404/410 just mean it's already gone — fine. Anything else is
+          // unexpected; log it but don't treat the delete as done.
+          calLogUnexpected(dr, 'DELETE', 'events/'+calEventId(id));
+        }
       }
     }
+    console.log('[Calendar] reconcile complete');
+  } catch(err){
+    // Any unexpected synchronous/async error still reaches finally below
+    // (guaranteed by try/finally) — this catch's only job is to stop it
+    // from becoming an unhandled promise rejection, since runCalReconcile
+    // is invoked from a bare setTimeout with no caller awaiting it.
+    console.log('[Calendar] reconcile failed:', (err && err.message) || err);
   } finally{
     calReconcileInFlight = false;
     if(calReconcileQueued){ calReconcileQueued = false; scheduleCalReconcile(500); }
