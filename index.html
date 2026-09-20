@@ -263,8 +263,16 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .est-track{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:0 0 6px;will-change:transform}
 .est-bar{flex-shrink:0;box-sizing:border-box;min-width:140px;height:46px;border-radius:14px;position:relative;overflow:hidden;cursor:pointer;display:flex;align-items:center;background:linear-gradient(90deg,rgba(245,200,66,.18),rgba(245,200,66,.07));border:1px solid rgba(245,200,66,.32);transition:transform .15s var(--ease)}
 .est-bar:active{transform:scale(.99)}
+.est-bar.has-cover{background-size:cover;background-repeat:no-repeat}
+.est-bar.has-cover::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;background:linear-gradient(90deg,rgba(10,8,5,.82) 0%,rgba(10,8,5,.6) 55%,rgba(10,8,5,.42) 100%)}
+.est-bar.has-cover::before{z-index:2}
+.est-bar.has-cover .est-bar-label{position:relative;z-index:1}
+.est-bar.has-cover .est-bar-title{color:#fff;font-weight:800;text-shadow:0 1px 3px rgba(0,0,0,.9),0 2px 12px rgba(0,0,0,.6)}
+.est-bar.has-cover .est-bar-sub{text-shadow:0 1px 3px rgba(0,0,0,.9)}
+
 .est-bar::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--amber)}
-.est-bar-label{box-sizing:border-box;min-width:0;max-width:min(100%,320px);padding:0 14px 0 16px;will-change:transform}
+.est-bar-label{box-sizing:border-box;min-width:0;max-width:min(100%,340px);padding:0 12px 0 16px;will-change:transform;display:flex;align-items:center;gap:10px}
+.est-bar-text{min-width:0;flex:1}
 .est-bar-title{font-size:13px;font-weight:700;color:var(--text-pri);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .est-bar-sub{font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(min-width:900px){.ev-hcard{flex:1 1 calc(33% - 11px)}}
@@ -2624,10 +2632,21 @@ function renderEstimatedOverlay(estItems, stripItems){
   track.innerHTML = estOverlayItems.map(e=>{
     const r = estRangeOf(e);
     const range = r.start===r.end ? estShortDate(r.start) : `${estShortDate(r.start)} \u2192 ${estShortDate(r.end)}`;
-    return `<div class="est-bar" role="button" onclick="handleSchRtTap('${e.id}','schedule')">
+    // Same cover resolution as buildEventCardHTML so the bar shows what the card used to.
+    const hasCover = !!e.hasCover;
+    const tagDefaultCover = !hasCover && !e.hasCardCrop ? getTagDefaultCover(e.tag) : null;
+    const bgUrl = e.hasCardCrop
+      ? (e.cardCoverUrl || null)
+      : (hasCover && e.coverUrl ? e.coverUrl : tagDefaultCover);
+    const bgStyle = bgUrl
+      ? ` style="background-image:url('${bgUrl}');background-position:center ${e.coverCardPosition != null ? e.coverCardPosition : 50}%"`
+      : '';
+    return `<div class="est-bar${bgUrl?' has-cover':''}" role="button"${bgStyle} onclick="handleSchRtTap('${e.id}','schedule')">
       <div class="est-bar-label">
-        <div class="est-bar-title">${esc(e.title||'Untitled')}</div>
-        <div class="est-bar-sub">ESTIMATED \u00B7 ${range}</div>
+        <div class="est-bar-text">
+          <div class="est-bar-title">${esc(e.title||'Untitled')}</div>
+          <div class="est-bar-sub">ESTIMATED \u00B7 ${range}</div>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -6024,6 +6043,7 @@ if('serviceWorker' in navigator){
 // v02f — Templates button added to routine tab; schedule/routine cards on Events tab open note detail modal; ndAutoSave saves body to correct array; event-only UI (cover, info bar, history) hidden for non-events
 // v02g — Action-card redesign: cover size control (S/M/L) in note detail menu persisted per-event; 'dark' skin recolored from brown to near-black charcoal; new 'tinted' lime-accented skin for schedule/routine cards (distinct from event cream/dark alternation); stronger bottom-weighted scrim + text-shadow on has-cover cards for legibility over busy images
 // v02h — Estimated Schedule spanning overlay: estimated schedules render as horizontal bars in a separate layer above the Action List (stacked by actual end datetime, latest end on top; span measured from rendered cards); normal Action List cards untouched
+// v02i — Estimated overlay bars now show the schedule cover (same resolution as cards)
 </script>
 </body>
 </html>
