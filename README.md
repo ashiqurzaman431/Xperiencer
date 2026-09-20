@@ -79,7 +79,7 @@ A green **+** button in the bottom nav adds something new for the current tab.
 
 ### Conflict system
 
-- **What it checks:** two items conflict if their time ranges overlap. The **end time counts**, not just the start. The date or day is checked too, so the same time on a different day is fine.
+- **What it checks:** two items conflict if their time ranges overlap. The **end time counts**, not just the start: an item is checked across its whole range (start to start + duration), so a 3-hour item at 5 AM runs to 8 AM and conflicts with a 7-9 AM item. Items that only **touch** (one ends exactly when the next begins) do not conflict, so 5 AM + 3 hours is fine before a 7 AM item. The date or day is checked too, so the same time on a different day is fine.
 - **Coverage:** routine vs routine, schedule vs schedule, and routine vs schedule. It runs when you save a schedule, a routine, or a note that has a date.
 - **Across midnight:** items that run past midnight and multi-day schedules are handled correctly.
 - **Routines** are checked against the next 12 months of days they repeat on. Editing only a routine's title or tag skips the check.
@@ -106,7 +106,7 @@ A green **+** button in the bottom nav adds something new for the current tab.
 
 ### Good to know
 
-- Deleting from the note screen adds an entry to the Deleted log (the last 50). Deleting from the edit sheet does not.
+- Deleting a note from the note screen adds an entry to the Deleted log (the last 50). Deleting a note from the edit sheet does not, and neither does deleting a schedule or routine.
 - Guest mode does not save data.
 
 ---
