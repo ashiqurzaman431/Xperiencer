@@ -951,6 +951,24 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div id="routine-streak-row" style="display:flex;gap:10px;margin-bottom:4px"></div>
   </div>
   <div class="sb" style="padding:0 20px calc(var(--nav-h) + var(--safe-b) + 12px)">
+    <div id="rtv-card" style="background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:12px 14px;margin-bottom:14px">
+      <div onclick="toggleRtvCard()" style="display:flex;justify-content:space-between;align-items:center;gap:10px;cursor:pointer">
+        <div style="min-width:0">
+          <div style="font-size:10px;font-weight:800;color:var(--text-sec);letter-spacing:.08em;text-transform:uppercase">Routine Validity</div>
+          <div id="rtv-summary" style="font-size:14px;font-weight:700;color:var(--text-pri);margin-top:2px"></div>
+        </div>
+        <span id="rtv-badge" style="flex-shrink:0;font-size:10px;font-weight:800;letter-spacing:.05em;padding:4px 9px;border-radius:20px"></span>
+      </div>
+      <div id="rtv-body" style="display:none;margin-top:12px">
+        <div class="dur-hint" id="rtv-msg" style="margin-bottom:8px"></div>
+        <div class="field-label">Valid from</div>
+        <input class="inp" id="rtv-from" type="date" oninput="rtvDirty=true">
+        <div class="field-label">Valid until</div>
+        <input class="inp" id="rtv-until" type="date" oninput="rtvDirty=true">
+        <button class="sheet-btn" onclick="saveRoutineValidity()">Save Validity</button>
+      </div>
+      <div id="rtv-conflicts" onclick="openRtvConflicts()" style="display:none;margin-top:10px;font-size:12px;font-weight:700;cursor:pointer"></div>
+    </div>
     <div class="slabel" id="routine-date-label"></div>
     <div class="tl-container" id="routine-list"></div>
     <div class="empty" id="routine-empty" style="display:none">
@@ -1147,6 +1165,16 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div id="rt-conflict-box"></div>
     <button class="sheet-btn" onclick="saveRoutine()">Save Routine</button>
     <button class="sheet-btn danger" id="rt-delete-btn" onclick="deleteRoutine()" style="display:none">Delete Routine</button>
+  </div>
+</div>
+
+<!-- ══ SHEET: ROUTINE VALIDITY CONFLICTS (read-only report) ══ -->
+<div class="overlay" id="rtv-conflicts-overlay" onclick="closeOverlay('rtv-conflicts-overlay',event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Routine conflicts</div>
+    <div class="dur-hint" id="rtv-conflicts-note" style="margin-bottom:10px"></div>
+    <div id="rtv-conflicts-list"></div>
   </div>
 </div>
 
@@ -1560,6 +1588,8 @@ async function enterApp(){
       timerCardCover = data.timerCardCover || null;
       focusedActionId = data.focusedActionId || null;
       tagCovers = data.tagCovers || {};
+      routineValidity = (data.routineValidity && typeof data.routineValidity.validFrom==='string' && typeof data.routineValidity.validUntil==='string')
+        ? {validFrom:data.routineValidity.validFrom, validUntil:data.routineValidity.validUntil} : null;
     }
     // One-time cleanup of legacy embedded data (old note-version history,
     // duplicated raw cover photos, embedded card-crop images) from data
@@ -1634,7 +1664,7 @@ async function loginWithGoogle(){
 async function driveInit(){ return; }
 
 function driveBuildPayload(){
-  return JSON.stringify({ events, schedules, routines, todos, todoSeqCounter, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines, timerCardCover, focusedActionId, tagCovers });
+  return JSON.stringify({ events, schedules, routines, todos, todoSeqCounter, completions, deletionLog, doneSchedules, adjustedDeadlines, lastResetDate, calendarArchive: window.calendarArchive||[], readyRoutines, timerCardCover, focusedActionId, tagCovers, routineValidity });
 }
 
 // One-time cleanup for data saved before this cleanup existed:
@@ -1795,6 +1825,11 @@ function getTagDefaultCover(tagStr){
   return null;
 }
 let readyRoutines = [];
+// Global Routine Validity Period (NOT per-routine): {validFrom:'YYYY-MM-DD', validUntil:'YYYY-MM-DD'} | null.
+// Inclusive calendar dates. null = never set (legacy behaviour: routines are not date-limited).
+let routineValidity = null;
+let rtvDirty = false;   // date inputs edited but not saved
+let rtvOpen = null;     // null = auto (open when unset-with-routines / expired), else user toggle
 let doneSchedules = {};
 let adjustedDeadlines = {}; // keyed by `${sourceId}_${date}` -> adjusted duration (minutes) for that occurrence
 let lastResetDate = '';
@@ -2018,7 +2053,8 @@ function getBusyBlocks(dateStr, winStart, winEnd, excludeId=null){
       const st = k*1440 + rMin, en = st + rDur;
       if(!(en > winStart && st < winEnd)) continue;
       const d = new Date(base); d.setDate(d.getDate()+k);
-      if(routineAppliesOn(r, toDS(d))) blocks.push({start:st, end:en});
+      const occDS = toDS(d);
+      if(routineAppliesOn(r, occDS) && routineDateInValidity(occDS)) blocks.push({start:st, end:en});
     }
   });
 
@@ -2050,7 +2086,7 @@ function routineUpcomingDates(r, months = ROUTINE_CONFLICT_HORIZON_MONTHS){
   const lastDS = toDS(addCalendarMonths(d, months));
   while(toDS(d) <= lastDS){ // YYYY-MM-DD strings compare correctly as text
     const ds = toDS(d);
-    if(routineAppliesOn(r, ds)) out.push(ds);
+    if(routineAppliesOn(r, ds) && routineDateInValidity(ds)) out.push(ds); // 12-month horizon ∩ global validity
     d.setDate(d.getDate()+1);
   }
   return out;
@@ -2078,6 +2114,69 @@ function routineAppliesOn(r,dateStr){
   if(r.repeatType==='day') return r.days.includes(d.getDay());
   if(r.repeatType==='date') return r.dates.includes(d.getDate());
   return false;
+}
+
+// ══════════════════════════════════════
+// GLOBAL ROUTINE VALIDITY
+// One period for the whole current Routine set. It only limits which dates the
+// routines take part in conflict detection; routines are never deleted, edited
+// or auto-resolved by it.
+// ══════════════════════════════════════
+// 'unset' | 'upcoming' (today < validFrom) | 'active' | 'expired' (today > validUntil)
+function routineValidityStatus(todayDS=todayStr()){
+  if(!routineValidity) return 'unset';
+  if(todayDS < routineValidity.validFrom) return 'upcoming';
+  if(todayDS > routineValidity.validUntil) return 'expired';
+  return 'active';
+}
+// Inclusive on both ends. No validity set = no date limit (backward compatible).
+function routineDateInValidity(ds){
+  if(!routineValidity) return true;
+  return ds >= routineValidity.validFrom && ds <= routineValidity.validUntil;
+}
+// Conflict window = existing 12-month horizon ∩ validity period. null if empty/unset.
+function routineConflictWindow(todayDS=todayStr()){
+  if(!routineValidity) return null;
+  const horizonEnd = toDS(addCalendarMonths(dsToDate(todayDS), ROUTINE_CONFLICT_HORIZON_MONTHS));
+  const from = routineValidity.validFrom > todayDS ? routineValidity.validFrom : todayDS;
+  const to = routineValidity.validUntil < horizonEnd ? routineValidity.validUntil : horizonEnd;
+  return from <= to ? {from, to} : null;
+}
+// Every routine-vs-schedule and routine-vs-routine overlap inside the window,
+// using the same half-open [start,end) rule as hasConflict(). Read-only: it
+// reports, it never changes anything.
+function computeRoutineValidityConflicts(todayDS=todayStr()){
+  const w = routineConflictWindow(todayDS);
+  if(!w) return [];
+  const base = w.from;
+  const winEnd = (daysBetweenDS(base, w.to)+1)*1440;
+  const iv = [];
+  for(let d=dsToDate(w.from); toDS(d)<=w.to; d.setDate(d.getDate()+1)){
+    const ds = toDS(d);
+    routines.forEach(r=>{
+      if(!routineAppliesOn(r, ds)) return;
+      const st = daysBetweenDS(base, ds)*1440 + timeToMin(r.time), dur = +r.dur||30;
+      iv.push({st, en:st+dur, kind:'routine', id:r.id, title:r.title||'Untitled', time:r.time, dur, date:ds});
+    });
+  }
+  schedules.forEach(sc=>{
+    if(sc.isEstimated || !sc.date) return; // estimated schedules never take part in conflicts
+    const st = daysBetweenDS(base, sc.date)*1440 + timeToMin(sc.time), dur = +sc.dur||60;
+    if(st+dur <= 0 || st >= winEnd) return;
+    iv.push({st, en:st+dur, kind:'schedule', id:sc.id, title:sc.title||'Untitled', time:sc.time, dur, date:sc.date});
+  });
+  iv.sort((a,b)=>a.st-b.st);
+  const out = [];
+  for(let i=0;i<iv.length;i++){
+    for(let j=i+1; j<iv.length && iv[j].st<iv[i].en; j++){
+      const a=iv[i], b=iv[j];
+      if(a.kind!=='routine' && b.kind!=='routine') continue; // schedule-vs-schedule is not this feature's job
+      if(a.kind===b.kind && a.id===b.id) continue;
+      const od = dsToDate(base); od.setDate(od.getDate()+Math.floor(b.st/1440));
+      out.push({date:toDS(od), a, b});
+    }
+  }
+  return out.sort((x,y)=> x.date<y.date?-1 : x.date>y.date?1 : x.b.st-y.b.st);
 }
 
 // "The end time counts" = an item is checked across its WHOLE range (start to
@@ -3641,6 +3740,7 @@ function showConflict(boxId,before,after,onPick){
 // ROUTINE VIEW
 // ══════════════════════════════════════
 function renderRoutine(){
+  renderRoutineValidityCard();
   const today = todayStr();
   document.getElementById('routine-date-label').textContent = friendlyDate(today);
   const el = document.getElementById('routine-list');
@@ -4198,6 +4298,83 @@ function openRoutineSheet(id=null){
   selectRtType(r ? r.repeatType : 'day');
   document.getElementById('rt-delete-btn').style.display = id ? 'block' : 'none';
   document.getElementById('routine-overlay').classList.add('open');
+}
+
+function rtvFmt(ds){
+  return dsToDate(ds).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function renderRoutineValidityCard(){
+  const card = document.getElementById('rtv-card');
+  if(!card) return;
+  const st = routineValidityStatus();
+  const badge = document.getElementById('rtv-badge');
+  const tone = {unset:['NOT SET','var(--amber)','rgba(245,200,66,.14)'],
+                upcoming:['STARTS '+(routineValidity?estShortDate(routineValidity.validFrom).toUpperCase():''),'var(--text-sec)','var(--bg-card2)'],
+                active:['ACTIVE','var(--lime)','var(--green-dim)'],
+                expired:['EXPIRED','var(--red)','var(--red-dim)']}[st];
+  badge.textContent = tone[0]; badge.style.color = tone[1]; badge.style.background = tone[2];
+  document.getElementById('rtv-summary').textContent = routineValidity
+    ? `${rtvFmt(routineValidity.validFrom)} \u2192 ${rtvFmt(routineValidity.validUntil)}` : 'Not set';
+  const msg = document.getElementById('rtv-msg');
+  msg.textContent = st==='expired'
+    ? 'Routine validity expired. Set a new validity period to continue using the current routines.'
+    : st==='unset' ? 'Routine validity has not been set yet. Set the period your current routines belong to.' : '';
+  msg.style.display = msg.textContent ? 'block' : 'none';
+  if(!rtvDirty){
+    document.getElementById('rtv-from').value = routineValidity ? routineValidity.validFrom : '';
+    document.getElementById('rtv-until').value = routineValidity ? routineValidity.validUntil : '';
+  }
+  const open = rtvOpen!==null ? rtvOpen : (st==='expired' || (st==='unset' && routines.length>0));
+  document.getElementById('rtv-body').style.display = open ? 'block' : 'none';
+  const cf = document.getElementById('rtv-conflicts');
+  if(st==='active' || st==='upcoming'){
+    const n = computeRoutineValidityConflicts().length;
+    cf.style.display = 'block';
+    cf.style.color = n ? 'var(--red)' : 'var(--text-sec)';
+    cf.textContent = n ? `${n} conflict${n>1?'s':''} in this period \u2014 View` : 'No conflicts in this period';
+    cf.style.cursor = n ? 'pointer' : 'default';
+  } else cf.style.display = 'none';
+}
+function toggleRtvCard(){
+  const body = document.getElementById('rtv-body');
+  rtvOpen = body.style.display==='none';
+  renderRoutineValidityCard();
+}
+function saveRoutineValidity(){
+  const from = document.getElementById('rtv-from').value;
+  const until = document.getElementById('rtv-until').value;
+  if(!from || !until){ showToast('Pick both dates'); return; }
+  if(until < from){ showToast('Valid until must be on or after Valid from.'); return; }
+  routineValidity = {validFrom:from, validUntil:until}; // date strings only — no timezone conversion
+  rtvDirty = false; rtvOpen = false;
+  driveSaveData();
+  renderRoutine();
+  const list = computeRoutineValidityConflicts(); // recalculated for the new period; shown, never auto-resolved
+  if(list.length) openRtvConflicts(list);
+  else showToast('Routine validity saved \u2014 no conflicts');
+}
+function openRtvConflicts(list){
+  list = Array.isArray(list) ? list : computeRoutineValidityConflicts();
+  if(!list.length) return;
+  const CAP = 150;
+  const side = it => `<div onclick="rtvEditItem('${it.kind}','${it.id}')" style="flex:1;min-width:0;background:var(--bg-card2);border:1px solid var(--border);border-radius:12px;padding:8px 10px;cursor:pointer">
+      <div style="font-size:9px;font-weight:800;letter-spacing:.06em;color:${it.kind==='routine'?'var(--lime)':'var(--amber)'}">${it.kind==='routine'?'ROUTINE':'SCHEDULE'}</div>
+      <div style="font-size:13px;font-weight:700;color:var(--text-pri);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.title)}</div>
+      <div style="font-size:11px;color:var(--text-sec)">${tlFmtTime(it.time)} \u2013 ${tlFmtTime(tlEndTime(it.time,it.dur))}</div>
+    </div>`;
+  let lastDate = '';
+  document.getElementById('rtv-conflicts-list').innerHTML = list.slice(0,CAP).map(c=>{
+    const head = c.date!==lastDate ? `<div class="field-label" style="margin-top:12px">${friendlyDate(c.date)}, ${dsToDate(c.date).getFullYear()}</div>` : '';
+    lastDate = c.date;
+    return head + `<div style="display:flex;gap:8px;margin-bottom:6px">${side(c.a)}${side(c.b)}</div>`;
+  }).join('') + (list.length>CAP ? `<div class="dur-hint" style="margin-top:10px">+ ${list.length-CAP} more not shown</div>` : '');
+  document.getElementById('rtv-conflicts-note').textContent =
+    `${list.length} conflict${list.length>1?'s':''} within ${rtvFmt(routineValidity.validFrom)} \u2192 ${rtvFmt(routineValidity.validUntil)}. Nothing was changed \u2014 tap an item to edit it yourself.`;
+  document.getElementById('rtv-conflicts-overlay').classList.add('open');
+}
+function rtvEditItem(kind, id){
+  document.getElementById('rtv-conflicts-overlay').classList.remove('open');
+  if(kind==='routine') openRoutineSheet(id); else openScheduleSheet(id);
 }
 
 async function saveRoutine(){
@@ -6099,6 +6276,7 @@ if('serviceWorker' in navigator){
 // v02h — Estimated Schedule spanning overlay: estimated schedules render as horizontal bars in a separate layer above the Action List (stacked by actual end datetime, latest end on top; span measured from rendered cards); normal Action List cards untouched
 // v02i — Estimated overlay bars now show the schedule cover (same resolution as cards)
 // v02j — Estimated overlay levels now come from datetime interval overlap (half-open [start,end)): overlapping schedules stack, non-overlapping/touching share a level
+// v02k — Global Routine Validity Period (routineValidity {validFrom,validUntil}, inclusive; stored beside readyRoutines/tagCovers, not on routines): limits routine participation in conflict detection, Routine-tab card, read-only conflict report after save
 </script>
 </body>
 </html>
