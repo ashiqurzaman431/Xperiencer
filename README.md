@@ -91,6 +91,17 @@ A green **+** button in the bottom nav adds something new for the current tab.
   - Example: a 3-hour item at 5 AM against a 7-9 AM item suggests 4:00 AM or 9:00 AM.
 - **Ready Routines "Apply"** does not check for conflicts. This is intentional.
 
+### Estimated Schedule spanning layer
+
+- Estimated schedules remain real Action List items and remain visible according to their existing date-range rules.
+- Active estimated schedules are presented as a separate spanning visual layer above the normal Schedule/Routine cards.
+- Each estimated layer spans from the left edge of the first relevant normal Action List card to the right edge of the last relevant normal card covered by its date range.
+- Multiple estimated schedules can coexist as separate layers.
+- Stacking uses the **actual upcoming end datetime**, not original duration: earliest-ending is lowest and latest-ending is highest. Equal end times use start datetime, then stable deterministic order.
+- The underlying estimated schedule remains real Action List data; the spanning layer is presentation only.
+- Normal Schedule/Routine card sizing, order, content and interaction remain unchanged.
+- Overlay geometry recalculates when the Action List or viewport/layout changes.
+
 ### All list rules
 
 - It shows **24 events at a time**, with a **Load more events** button that adds 24 more.
@@ -178,8 +189,6 @@ Events, schedules, routines, todos, completion states, adjusted deadlines, the d
 
 ## About the Creator
 
-**Ashiqur Zaman Arshad** is a writer in Bengali and English and the architect of Xperiencer. He is currently doing his major in Botany, so he is used to things that grow slowly and need the right conditions. He writes because it is how he makes sense of his days, and he built this app so that habit could live in the same place as his schedule, his routines and everything else a day is made of.
+**Ashiqur Zaman Arshad** is a Bengali and English writer and the architect of Xperiencer. He is currently majoring in Botany and builds software around the same interest in observing, recording, and understanding everyday life.
 
-He decides what the app should do and why; AI writes the code. He writes the reasoning, the AI writes the semicolons, and he would rather say so plainly than pretend otherwise.
-
-For him, a note is never just text; it is an event that is still happening, and Xperiencer is built around that idea. It is also built to be honest about time: things run past midnight, plans get missed, and the app keeps track of that instead of pretending the day went as planned. In the end, it is a notebook that understands what a day actually looks like.
+Xperiencer is designed and directed by Arshad, with AI used as the coding partner.
