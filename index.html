@@ -261,7 +261,8 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 .est-overlay{position:relative;overflow-x:hidden;overflow-y:auto;max-height:152px;margin-bottom:2px;scrollbar-width:none;overscroll-behavior:contain;touch-action:pan-y}
 .est-overlay::-webkit-scrollbar{display:none}
 .est-track{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:0 0 6px;will-change:transform}
-.est-bar{flex-shrink:0;box-sizing:border-box;min-width:140px;height:46px;border-radius:14px;position:relative;overflow:hidden;cursor:pointer;display:flex;align-items:center;background:linear-gradient(90deg,rgba(245,200,66,.18),rgba(245,200,66,.07));border:1px solid rgba(245,200,66,.32);transition:transform .15s var(--ease)}
+.est-row{position:relative;flex-shrink:0;width:100%;height:46px}
+.est-bar{box-sizing:border-box;min-width:140px;height:46px;border-radius:14px;position:absolute;top:0;left:0;overflow:hidden;cursor:pointer;display:flex;align-items:center;background:linear-gradient(90deg,rgba(245,200,66,.18),rgba(245,200,66,.07));border:1px solid rgba(245,200,66,.32);transition:transform .15s var(--ease)}
 .est-bar:active{transform:scale(.99)}
 .est-bar.has-cover{background-size:cover;background-repeat:no-repeat}
 .est-bar.has-cover::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:0;background:linear-gradient(90deg,rgba(10,8,5,.82) 0%,rgba(10,8,5,.6) 55%,rgba(10,8,5,.42) 100%)}
@@ -2584,7 +2585,8 @@ setInterval(updateLiveClockCard, 1000);
 // lifecycle of its own) and measures the real rendered normal cards to size
 // each bar. Nothing here touches the normal cards, their order or their state.
 // ══════════════════════════════════════
-let estOverlayItems = [];   // estimated items, TOP bar first
+let estOverlayItems = [];   // estimated items in level-assignment order (earliest end first)
+let estOverlayLevel = new Map(); // item id -> visual level (0 = bottom, next to the cards)
 let estOverlayStrip = [];   // normal (non-estimated) Action List items, as rendered
 let estOverlayGeo = [];     // per-bar geometry for the scroll-sync label
 let estOverlayCount = -1;
@@ -2604,6 +2606,28 @@ function estEndMs(s){
   return d.getTime();
 }
 function estStartMs(s){ return dsToDate(estRangeOf(s).start).getTime(); }
+// Half-open interval overlap: [start,end). Touching ranges (A.end === B.start) do NOT overlap.
+function estOverlaps(a, b){
+  return estStartMs(a) < estEndMs(b) && estStartMs(b) < estEndMs(a);
+}
+// First-fit level assignment. Items are visited earliest-end first (ties: earlier
+// start, then original order) and each takes the lowest level holding nothing it
+// overlaps. Non-overlapping items therefore share a level; end-time only decides
+// the visiting order, never whether a new level is created.
+function estAssignLevels(sortedItems){
+  const levels = [];
+  const levelOf = new Map();
+  sortedItems.forEach(e=>{
+    let L = 0;
+    for(;; L++){
+      if(!levels[L]) levels[L] = [];
+      if(!levels[L].some(o=>estOverlaps(o,e))) break;
+    }
+    levels[L].push(e);
+    levelOf.set(e.id, L);
+  });
+  return {levels, levelOf};
+}
 function estShortDate(ds){
   return dsToDate(ds).toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
@@ -2620,16 +2644,18 @@ function renderEstimatedOverlay(estItems, stripItems){
     if(estOverlayRO) estOverlayRO.disconnect();
     return;
   }
-  // Bottom→top order: earliest actual end first. Ties: earlier start lower,
-  // then original schedules[] order so the result is deterministic.
+  // Visiting order: earliest actual end first. Ties: earlier start, then original
+  // schedules[] order so the result is deterministic.
   const idx = new Map(schedules.map((x,i)=>[x.id,i]));
-  const bottomUp = estItems.slice().sort((a,b)=>
+  const sorted = estItems.slice().sort((a,b)=>
     (estEndMs(a)-estEndMs(b)) ||
     (estStartMs(a)-estStartMs(b)) ||
     ((idx.get(a.id)??0)-(idx.get(b.id)??0)));
-  estOverlayItems = bottomUp.slice().reverse(); // latest end rendered first = top
+  const {levels, levelOf} = estAssignLevels(sorted);
+  estOverlayItems = sorted;
+  estOverlayLevel = levelOf;
 
-  track.innerHTML = estOverlayItems.map(e=>{
+  const barHTML = e=>{
     const r = estRangeOf(e);
     const range = r.start===r.end ? estShortDate(r.start) : `${estShortDate(r.start)} \u2192 ${estShortDate(r.end)}`;
     // Same cover resolution as buildEventCardHTML so the bar shows what the card used to.
@@ -2641,7 +2667,7 @@ function renderEstimatedOverlay(estItems, stripItems){
     const bgStyle = bgUrl
       ? ` style="background-image:url('${bgUrl}');background-position:center ${e.coverCardPosition != null ? e.coverCardPosition : 50}%"`
       : '';
-    return `<div class="est-bar${bgUrl?' has-cover':''}" role="button"${bgStyle} onclick="handleSchRtTap('${e.id}','schedule')">
+    return `<div class="est-bar${bgUrl?' has-cover':''}" data-k="${estOverlayItems.indexOf(e)}" role="button"${bgStyle} onclick="handleSchRtTap('${e.id}','schedule')">
       <div class="est-bar-label">
         <div class="est-bar-text">
           <div class="est-bar-title">${esc(e.title||'Untitled')}</div>
@@ -2649,16 +2675,19 @@ function renderEstimatedOverlay(estItems, stripItems){
         </div>
       </div>
     </div>`;
-  }).join('');
+  };
+  // Highest level at the top, level 0 (earliest-ending) nearest the cards.
+  track.innerHTML = levels.map((_,L)=>L).reverse()
+    .map(L=>`<div class="est-row">${levels[L].map(barHTML).join('')}</div>`).join('');
   wrap.style.display = 'block';
 
   layoutEstimatedOverlay();
   // Keep the bars nearest the cards (earliest-ending) in view when the stack is
   // taller than the overlay's max height; only when the number of bars changes,
   // so a manual scroll of the overlay isn't reset by unrelated re-renders.
-  if(estOverlayCount !== estOverlayItems.length){
+  if(estOverlayCount !== levels.length){
     wrap.scrollTop = wrap.scrollHeight;
-    estOverlayCount = estOverlayItems.length;
+    estOverlayCount = levels.length;
   }
   // Re-measure when the strip or any card changes size (viewport, orientation,
   // tab becoming visible, fonts). Event-driven; no polling.
@@ -2694,9 +2723,8 @@ function layoutEstimatedOverlay(){
   const firstLeft = cards.length ? Math.min(...cards.map(c=>c.l)) : 20;
   track.style.width = strip.scrollWidth + 'px';
   estOverlayGeo = [];
+  const geo = [];
   estOverlayItems.forEach((e,i)=>{
-    const bar = track.children[i];
-    if(!bar) return;
     const {start,end} = estRangeOf(e);
     const covered = cards.filter(c=>c.date && c.date>=start && c.date<=end);
     // A range that has already started begins at the list's left boundary;
@@ -2704,11 +2732,37 @@ function layoutEstimatedOverlay(){
     const left = (start<=today || !covered.length) ? firstLeft : Math.min(...covered.map(c=>c.l));
     // No normal cards in range: fall back to the visible width of the list.
     const right = covered.length ? Math.max(...covered.map(c=>c.r)) : left + Math.max(140, strip.clientWidth-left-20);
-    const width = Math.max(140, right-left);
-    bar.style.marginLeft = left+'px';
-    bar.style.width = width+'px';
+    geo[i] = {left, width: Math.max(140, right-left)};
+  });
+  // Bars sharing a level never have overlapping datetimes, so their spans normally
+  // sit side by side; this only nudges the degenerate case (e.g. the no-cards
+  // fallback width) so two bars on one level can't draw on top of each other.
+  const byLevel = new Map();
+  estOverlayItems.forEach((e,i)=>{
+    const L = estOverlayLevel.get(e.id);
+    if(!byLevel.has(L)) byLevel.set(L, []);
+    byLevel.get(L).push(i);
+  });
+  byLevel.forEach(ids=>{
+    ids.sort((a,b)=>geo[a].left-geo[b].left);
+    let prevRight = -Infinity;
+    ids.forEach(i=>{
+      const g = geo[i];
+      if(g.left < prevRight+6){
+        const right = g.left+g.width;
+        g.left = prevRight+6;
+        g.width = Math.max(140, right-g.left);
+      }
+      prevRight = g.left+g.width;
+    });
+  });
+  track.querySelectorAll('.est-bar').forEach(bar=>{
+    const g = geo[+bar.dataset.k];
+    if(!g) return;
+    bar.style.left = g.left+'px';
+    bar.style.width = g.width+'px';
     const label = bar.querySelector('.est-bar-label');
-    estOverlayGeo.push({label, left, width, labelW: label ? label.offsetWidth : 0});
+    estOverlayGeo.push({label, left:g.left, width:g.width, labelW: label ? label.offsetWidth : 0});
   });
   syncEstimatedOverlay();
 }
@@ -6044,6 +6098,7 @@ if('serviceWorker' in navigator){
 // v02g — Action-card redesign: cover size control (S/M/L) in note detail menu persisted per-event; 'dark' skin recolored from brown to near-black charcoal; new 'tinted' lime-accented skin for schedule/routine cards (distinct from event cream/dark alternation); stronger bottom-weighted scrim + text-shadow on has-cover cards for legibility over busy images
 // v02h — Estimated Schedule spanning overlay: estimated schedules render as horizontal bars in a separate layer above the Action List (stacked by actual end datetime, latest end on top; span measured from rendered cards); normal Action List cards untouched
 // v02i — Estimated overlay bars now show the schedule cover (same resolution as cards)
+// v02j — Estimated overlay levels now come from datetime interval overlap (half-open [start,end)): overlapping schedules stack, non-overlapping/touching share a level
 </script>
 </body>
 </html>
