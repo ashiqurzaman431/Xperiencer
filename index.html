@@ -257,6 +257,16 @@ html,body{height:100%;width:100%;background:var(--bg);font-family:'Inter',sans-s
 /* ── Event Horizontal Cards ── */
 .ev-scroll{overflow-x:auto;overflow-y:hidden;display:flex;gap:14px;padding:4px 20px 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-y pan-x;overscroll-behavior-x:contain}
 .ev-scroll::-webkit-scrollbar{display:none}
+/* ── Estimated Schedule overlay (sits above #events-list; never overlaps its cards) ── */
+.est-overlay{position:relative;overflow-x:hidden;overflow-y:auto;max-height:152px;margin-bottom:2px;scrollbar-width:none;overscroll-behavior:contain;touch-action:pan-y}
+.est-overlay::-webkit-scrollbar{display:none}
+.est-track{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:0 0 6px;will-change:transform}
+.est-bar{flex-shrink:0;box-sizing:border-box;min-width:140px;height:46px;border-radius:14px;position:relative;overflow:hidden;cursor:pointer;display:flex;align-items:center;background:linear-gradient(90deg,rgba(245,200,66,.18),rgba(245,200,66,.07));border:1px solid rgba(245,200,66,.32);transition:transform .15s var(--ease)}
+.est-bar:active{transform:scale(.99)}
+.est-bar::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--amber)}
+.est-bar-label{box-sizing:border-box;min-width:0;max-width:min(100%,320px);padding:0 14px 0 16px;will-change:transform}
+.est-bar-title{font-size:13px;font-weight:700;color:var(--text-pri);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.est-bar-sub{font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(min-width:900px){.ev-hcard{flex:1 1 calc(33% - 11px)}}
 /* ══ Events Tab Two-List Layout ══ */
 .ev-section-title{font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;padding:20px 20px 10px;clear:both;position:relative}
@@ -835,6 +845,8 @@ textarea.inp{resize:none;min-height:80px;line-height:1.6;font-size:16px}
     <div style="padding:0 20px 6px">
       <div style="font-size:11px;font-weight:800;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Action List <span id="action-count" style="font-weight:400;opacity:.6"></span></div>
     </div>
+    <!-- Estimated Schedule overlay: visual-only layer above the Action List strip -->
+    <div class="est-overlay" id="est-overlay" style="display:none"><div class="est-track" id="est-track"></div></div>
     <div class="ev-scroll" id="events-list"></div>
     <div class="empty" id="events-empty" style="display:none;margin:0 20px">
       <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
@@ -1824,6 +1836,21 @@ function calcTimeState(dateStr){
   if(dateStr === today) return 'present';
   return dateStr < today ? 'past' : 'future';
 }
+// Calendar-span state for an ESTIMATED schedule (Action List visibility only).
+// Unlike calcTimeState(estStartDate), which turns 'past' the moment the first
+// day ends, this stays 'present' through the whole inclusive range
+// estStartDate..estEndDate and only becomes 'past' once the final calendar day
+// has ended (i.e. from 00:00 of the day after estEndDate). It is independent of
+// the countdown timer, which still anchors on 00:00 of the first day.
+function calcEstimatedSpanState(s){
+  const start = s.estStartDate || s.date;
+  if(!start) return null;
+  const end = (s.estEndDate && s.estEndDate > start) ? s.estEndDate : start;
+  const today = todayStr();
+  if(today < start) return 'future';
+  if(today <= end) return 'present';
+  return 'past';
+}
 function fmtTime(t){if(!t)return'';const[h,m]=t.split(':').map(Number);return(h%12||12)+':'+p2(m)+(h<12?'am':'pm')}
 function fmtTimeEnd(t,dur){if(!t)return'';const[h,m]=t.split(':').map(Number);const tot=h*60+m+(+dur||60);return fmtTime(p2(Math.floor(tot/60)%24)+':'+p2(tot%60))}
 function addMinutes(t,min){const[h,m]=t.split(':').map(Number);const tot=h*60+m+min;return p2(Math.floor(tot/60)%24)+':'+p2(tot%60)}
@@ -2542,6 +2569,155 @@ function fitTimerOneLine(el){
 }
 setInterval(updateLiveClockCard, 1000);
 
+// ══════════════════════════════════════
+// ESTIMATED SCHEDULE OVERLAY
+// Visual-only layer above the Action List strip. It is fed the SAME estimated
+// items renderEvents() already computed for the Action List (so it has no
+// lifecycle of its own) and measures the real rendered normal cards to size
+// each bar. Nothing here touches the normal cards, their order or their state.
+// ══════════════════════════════════════
+let estOverlayItems = [];   // estimated items, TOP bar first
+let estOverlayStrip = [];   // normal (non-estimated) Action List items, as rendered
+let estOverlayGeo = [];     // per-bar geometry for the scroll-sync label
+let estOverlayCount = -1;
+let estOverlayRO = null;
+let estOverlaySyncQueued = false;
+
+function estRangeOf(s){
+  const start = s.estStartDate || s.date;
+  const end = (s.estEndDate && s.estEndDate > start) ? s.estEndDate : start;
+  return {start, end};
+}
+// Actual end moment = 00:00 of the day after the last covered day. This is the
+// same moment calcEstimatedSpanState() flips the item from 'present' to 'past'.
+function estEndMs(s){
+  const d = dsToDate(estRangeOf(s).end);
+  d.setDate(d.getDate()+1);
+  return d.getTime();
+}
+function estStartMs(s){ return dsToDate(estRangeOf(s).start).getTime(); }
+function estShortDate(ds){
+  return dsToDate(ds).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+
+function renderEstimatedOverlay(estItems, stripItems){
+  const wrap = document.getElementById('est-overlay');
+  const track = document.getElementById('est-track');
+  if(!wrap || !track) return;
+  estOverlayStrip = stripItems || [];
+  if(!estItems.length){
+    wrap.style.display = 'none';
+    track.innerHTML = '';
+    estOverlayItems = []; estOverlayGeo = []; estOverlayCount = 0;
+    if(estOverlayRO) estOverlayRO.disconnect();
+    return;
+  }
+  // Bottom→top order: earliest actual end first. Ties: earlier start lower,
+  // then original schedules[] order so the result is deterministic.
+  const idx = new Map(schedules.map((x,i)=>[x.id,i]));
+  const bottomUp = estItems.slice().sort((a,b)=>
+    (estEndMs(a)-estEndMs(b)) ||
+    (estStartMs(a)-estStartMs(b)) ||
+    ((idx.get(a.id)??0)-(idx.get(b.id)??0)));
+  estOverlayItems = bottomUp.slice().reverse(); // latest end rendered first = top
+
+  track.innerHTML = estOverlayItems.map(e=>{
+    const r = estRangeOf(e);
+    const range = r.start===r.end ? estShortDate(r.start) : `${estShortDate(r.start)} \u2192 ${estShortDate(r.end)}`;
+    return `<div class="est-bar" role="button" onclick="handleSchRtTap('${e.id}','schedule')">
+      <div class="est-bar-label">
+        <div class="est-bar-title">${esc(e.title||'Untitled')}</div>
+        <div class="est-bar-sub">ESTIMATED \u00B7 ${range}</div>
+      </div>
+    </div>`;
+  }).join('');
+  wrap.style.display = 'block';
+
+  layoutEstimatedOverlay();
+  // Keep the bars nearest the cards (earliest-ending) in view when the stack is
+  // taller than the overlay's max height; only when the number of bars changes,
+  // so a manual scroll of the overlay isn't reset by unrelated re-renders.
+  if(estOverlayCount !== estOverlayItems.length){
+    wrap.scrollTop = wrap.scrollHeight;
+    estOverlayCount = estOverlayItems.length;
+  }
+  // Re-measure when the strip or any card changes size (viewport, orientation,
+  // tab becoming visible, fonts). Event-driven; no polling.
+  if(typeof ResizeObserver !== 'undefined'){
+    if(!estOverlayRO) estOverlayRO = new ResizeObserver(()=>layoutEstimatedOverlay());
+    estOverlayRO.disconnect();
+    const strip = document.getElementById('events-list');
+    if(strip){
+      estOverlayRO.observe(strip);
+      strip.querySelectorAll('.ev-hcard').forEach(c=>estOverlayRO.observe(c));
+    }
+  }
+}
+
+// Sizes every bar from the real rendered card rectangles, in the strip's own
+// scroll-content coordinates, so bars line up with the cards while scrolling.
+function layoutEstimatedOverlay(){
+  const strip = document.getElementById('events-list');
+  const wrap = document.getElementById('est-overlay');
+  const track = document.getElementById('est-track');
+  if(!strip || !wrap || !track || wrap.style.display==='none') return;
+  const sr = strip.getBoundingClientRect();
+  if(!sr.width) return; // Events tab hidden; ResizeObserver re-runs this when it shows
+  const sl = strip.scrollLeft;
+  const cards = [];
+  estOverlayStrip.forEach(e=>{
+    const c = document.getElementById('ev-hcard-'+e.id);
+    if(!c) return;
+    const r = c.getBoundingClientRect();
+    cards.push({date:e.date||'', l:r.left-sr.left+sl, r:r.right-sr.left+sl});
+  });
+  const today = todayStr();
+  const firstLeft = cards.length ? Math.min(...cards.map(c=>c.l)) : 20;
+  track.style.width = strip.scrollWidth + 'px';
+  estOverlayGeo = [];
+  estOverlayItems.forEach((e,i)=>{
+    const bar = track.children[i];
+    if(!bar) return;
+    const {start,end} = estRangeOf(e);
+    const covered = cards.filter(c=>c.date && c.date>=start && c.date<=end);
+    // A range that has already started begins at the list's left boundary;
+    // a future range begins at the first card it covers.
+    const left = (start<=today || !covered.length) ? firstLeft : Math.min(...covered.map(c=>c.l));
+    // No normal cards in range: fall back to the visible width of the list.
+    const right = covered.length ? Math.max(...covered.map(c=>c.r)) : left + Math.max(140, strip.clientWidth-left-20);
+    const width = Math.max(140, right-left);
+    bar.style.marginLeft = left+'px';
+    bar.style.width = width+'px';
+    const label = bar.querySelector('.est-bar-label');
+    estOverlayGeo.push({label, left, width, labelW: label ? label.offsetWidth : 0});
+  });
+  syncEstimatedOverlay();
+}
+
+// Follows the strip's horizontal scroll and keeps each bar's text visible while
+// its bar is partly scrolled off the left edge.
+function syncEstimatedOverlay(){
+  const strip = document.getElementById('events-list');
+  const track = document.getElementById('est-track');
+  if(!strip || !track) return;
+  const sl = strip.scrollLeft;
+  track.style.transform = `translateX(${-sl}px)`;
+  estOverlayGeo.forEach(g=>{
+    if(!g.label) return;
+    const off = Math.min(Math.max(0, g.width-g.labelW), Math.max(0, sl-g.left));
+    g.label.style.transform = `translateX(${off}px)`;
+  });
+}
+(function(){
+  const strip = document.getElementById('events-list');
+  if(!strip) return;
+  strip.addEventListener('scroll', ()=>{
+    if(estOverlaySyncQueued) return;
+    estOverlaySyncQueued = true;
+    requestAnimationFrame(()=>{ estOverlaySyncQueued = false; syncEstimatedOverlay(); });
+  }, {passive:true});
+})();
+
 function renderEvents(){
   const today = todayStr();
 
@@ -2550,7 +2726,7 @@ function renderEvents(){
 
   const schItems = schedules.map(s=>({
     ...s, _source:'schedule',
-    _timeState: calcTimeState(s.date),
+    _timeState: s.isEstimated ? calcEstimatedSpanState(s) : calcTimeState(s.date),
     _occState: getEventState(s.date, s.time, s.dur),
     openState:'open', body: s.body||s.notes||'', tag: s.tag||''
   }));
@@ -2744,15 +2920,19 @@ function renderEvents(){
       </div>
     </div>`;
 
-  if(!actionItems.length){
+  // Estimated schedules stay in actionItems (count, timer focus, lifecycle) but are
+  // drawn by the overlay layer above the strip, not as cards inside it.
+  const stripItems = actionItems.filter(e=>!e.isEstimated);
+  if(!stripItems.length){
     el.innerHTML = clockCardHTML;
     if(emptyEl) emptyEl.style.display= eTab==='closed' ? 'flex' : 'none';
   } else {
     if(emptyEl) emptyEl.style.display='none';
-    el.innerHTML = clockCardHTML + actionItems.map(e=>buildEventCardHTML(e,'ev-hcard-')).join('');
-    loadCardCovers(actionItems, 'ev-hcard-');
+    el.innerHTML = clockCardHTML + stripItems.map(e=>buildEventCardHTML(e,'ev-hcard-')).join('');
+    loadCardCovers(stripItems, 'ev-hcard-');
   }
   updateLiveClockCard();
+  renderEstimatedOverlay(eTab==='closed' ? [] : actionItems.filter(e=>e.isEstimated), stripItems);
 
   // ── EVENTS LIST: every open event, dated or undated, newest-updated first ──
   const openEventItems = evItems
@@ -5843,6 +6023,7 @@ if('serviceWorker' in navigator){
 // v02e — Routine edit sheet: pencil icon on routine cards opens sheet pre-filled; full edit + delete; openRoutineDetail routes to sheet
 // v02f — Templates button added to routine tab; schedule/routine cards on Events tab open note detail modal; ndAutoSave saves body to correct array; event-only UI (cover, info bar, history) hidden for non-events
 // v02g — Action-card redesign: cover size control (S/M/L) in note detail menu persisted per-event; 'dark' skin recolored from brown to near-black charcoal; new 'tinted' lime-accented skin for schedule/routine cards (distinct from event cream/dark alternation); stronger bottom-weighted scrim + text-shadow on has-cover cards for legibility over busy images
+// v02h — Estimated Schedule spanning overlay: estimated schedules render as horizontal bars in a separate layer above the Action List (stacked by actual end datetime, latest end on top; span measured from rendered cards); normal Action List cards untouched
 </script>
 </body>
 </html>
