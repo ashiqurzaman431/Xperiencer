@@ -4773,6 +4773,13 @@ function calMarkExpired(){
 // schedule being marked done before its start) — never from every
 // driveSaveData() call site, so autosave/cover changes don't churn Calendar.
 function scheduleCalReconcile(delayMs){
+  console.log('[CALDIAG] scheduleCalReconcile() called. delayMs=', delayMs,
+    '| firebaseUid=', firebaseUid, '| getAuthMode()=', getAuthMode(),
+    '| calendarSync=', JSON.parse(JSON.stringify(calendarSync)),
+    '| calAccessToken=', calAccessToken ? '(present, len='+calAccessToken.length+')' : null,
+    '| appDataLoaded=', appDataLoaded, '| calSyncInvalidated=', calSyncInvalidated,
+    '| calReconcileSafe()=', calReconcileSafe(),
+    '| calReconcileInFlight=', calReconcileInFlight, '| calReconcileQueued=', calReconcileQueued);
   // Calendar is supposed to be on but this session has no usable token
   // (e.g. after a reload — the token is intentionally memory-only and
   // never persisted). Previously this just returned silently; now it
@@ -4783,9 +4790,10 @@ function scheduleCalReconcile(delayMs){
     console.log('[Calendar] reconcile skipped: no access token this session — Reconnect required');
     return;
   }
-  if(!calReconcileSafe()) return;
+  if(!calReconcileSafe()){ console.log('[CALDIAG] scheduleCalReconcile: ABORTED — calReconcileSafe() false.'); return; }
   clearTimeout(calReconcileTimer);
-  calReconcileTimer = setTimeout(runCalReconcile, delayMs===undefined ? 3000 : delayMs);
+  calReconcileTimer = setTimeout(()=>{ console.log('[CALDIAG] debounce timer FIRED'); runCalReconcile(); }, delayMs===undefined ? 3000 : delayMs);
+  console.log('[CALDIAG] debounce timer armed for', delayMs===undefined?3000:delayMs, 'ms');
 }
 
 // Every Calendar API request gets a client-side timeout so a hung
@@ -4886,8 +4894,13 @@ async function runCalReconcile(){
       if(calScheduleIneligible(s)) return;
       desired.set(s.id, s);
     });
+    console.log('[CALDIAG] desired map built, size=', desired.size);
+    schedules.forEach(s=>{
+      console.log('[CALDIAG] schedule seen:', {id:s.id, title:s.title, date:s.date, time:s.time, dur:s.dur, isEstimated:s.isEstimated, ineligible: !s.isEstimated && s.date && s.time ? calScheduleIneligible(s) : 'n/a', inDesired: desired.has(s.id)});
+    });
 
     const res = await calRequest('GET', 'events?privateExtendedProperty=' + encodeURIComponent('xpr=1') + '&showDeleted=false&singleEvents=true&maxResults=2500');
+    console.log('[CALDIAG] GET events list result:', res ? ('status='+res.status) : 'null (request failed — see [Calendar] request failed line above)');
     if(!res){ console.log('[Calendar] reconcile failed: could not list events'); return; } // abort/timeout/network — already logged by calRequest
 
     if(res.status === 401){ calMarkExpired(); return; }
@@ -4901,6 +4914,7 @@ async function runCalReconcile(){
       const p = ev.extendedProperties && ev.extendedProperties.private;
       if(p && p.xpr==='1' && p.xprType==='schedule' && p.xprId) actual.set(p.xprId, ev);
     });
+    console.log('[CALDIAG] actual map (Xperiencer-owned Calendar events) size=', actual.size, 'ids=', Array.from(actual.keys()));
 
     if(!calReconcileSafe()) return; // re-check right before anything destructive
 
@@ -4918,7 +4932,11 @@ async function runCalReconcile(){
       const desiredBody = calDesiredEventBody(s);
       const existing = actual.get(id);
       if(!existing){
-        const cr = await calRequest('POST', 'events', Object.assign({id:evId}, desiredBody));
+        const desiredCreateBody = Object.assign({id:evId}, desiredBody);
+        console.log('[CALDIAG] CREATE branch for schedule', id, '| evId=', evId, '| request body=', JSON.stringify(desiredCreateBody));
+        const cr = await calRequest('POST', 'events', desiredCreateBody);
+        console.log('[CALDIAG] CREATE result:', cr ? ('status='+cr.status) : 'null (request failed)');
+        if(cr) cr.clone().text().then(t=>console.log('[CALDIAG] CREATE response body:', t)).catch(()=>{});
         if(!cr){ console.log('[Calendar] reconcile failed: create request did not complete for', evId); return; }
         if(cr.status === 401){ calMarkExpired(); return; }
         if(cr.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
