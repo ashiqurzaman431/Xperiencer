@@ -4773,13 +4773,6 @@ function calMarkExpired(){
 // schedule being marked done before its start) — never from every
 // driveSaveData() call site, so autosave/cover changes don't churn Calendar.
 function scheduleCalReconcile(delayMs){
-  console.log('[CALDIAG] scheduleCalReconcile() called. delayMs=', delayMs,
-    '| firebaseUid=', firebaseUid, '| getAuthMode()=', getAuthMode(),
-    '| calendarSync=', JSON.parse(JSON.stringify(calendarSync)),
-    '| calAccessToken=', calAccessToken ? '(present, len='+calAccessToken.length+')' : null,
-    '| appDataLoaded=', appDataLoaded, '| calSyncInvalidated=', calSyncInvalidated,
-    '| calReconcileSafe()=', calReconcileSafe(),
-    '| calReconcileInFlight=', calReconcileInFlight, '| calReconcileQueued=', calReconcileQueued);
   // Calendar is supposed to be on but this session has no usable token
   // (e.g. after a reload — the token is intentionally memory-only and
   // never persisted). Previously this just returned silently; now it
@@ -4790,10 +4783,9 @@ function scheduleCalReconcile(delayMs){
     console.log('[Calendar] reconcile skipped: no access token this session — Reconnect required');
     return;
   }
-  if(!calReconcileSafe()){ console.log('[CALDIAG] scheduleCalReconcile: ABORTED — calReconcileSafe() false.'); return; }
+  if(!calReconcileSafe()) return;
   clearTimeout(calReconcileTimer);
-  calReconcileTimer = setTimeout(()=>{ console.log('[CALDIAG] debounce timer FIRED'); runCalReconcile(); }, delayMs===undefined ? 3000 : delayMs);
-  console.log('[CALDIAG] debounce timer armed for', delayMs===undefined?3000:delayMs, 'ms');
+  calReconcileTimer = setTimeout(runCalReconcile, delayMs===undefined ? 3000 : delayMs);
 }
 
 // Every Calendar API request gets a client-side timeout so a hung
@@ -4894,13 +4886,8 @@ async function runCalReconcile(){
       if(calScheduleIneligible(s)) return;
       desired.set(s.id, s);
     });
-    console.log('[CALDIAG] desired map built, size=', desired.size);
-    schedules.forEach(s=>{
-      console.log('[CALDIAG] schedule seen:', {id:s.id, title:s.title, date:s.date, time:s.time, dur:s.dur, isEstimated:s.isEstimated, ineligible: !s.isEstimated && s.date && s.time ? calScheduleIneligible(s) : 'n/a', inDesired: desired.has(s.id)});
-    });
 
     const res = await calRequest('GET', 'events?privateExtendedProperty=' + encodeURIComponent('xpr=1') + '&showDeleted=false&singleEvents=true&maxResults=2500');
-    console.log('[CALDIAG] GET events list result:', res ? ('status='+res.status) : 'null (request failed — see [Calendar] request failed line above)');
     if(!res){ console.log('[Calendar] reconcile failed: could not list events'); return; } // abort/timeout/network — already logged by calRequest
 
     if(res.status === 401){ calMarkExpired(); return; }
@@ -4914,7 +4901,6 @@ async function runCalReconcile(){
       const p = ev.extendedProperties && ev.extendedProperties.private;
       if(p && p.xpr==='1' && p.xprType==='schedule' && p.xprId) actual.set(p.xprId, ev);
     });
-    console.log('[CALDIAG] actual map (Xperiencer-owned Calendar events) size=', actual.size, 'ids=', Array.from(actual.keys()));
 
     if(!calReconcileSafe()) return; // re-check right before anything destructive
 
@@ -4923,20 +4909,21 @@ async function runCalReconcile(){
     // treated as a possible transitional/bug state, not a real mass
     // deletion — skip the delete pass entirely this round.
     const suspiciousEmpty = desired.size === 0 && actual.size > 3;
-    let attempts = 0, maxAttempts = 25;
+    // Runaway guard: each loop gets its own counter, capped at the size of
+    // the collection it's actually iterating (so every legitimate item is
+    // always reachable) with a high absolute ceiling on top purely as a
+    // defensive backstop against a corrupted/pathological schedules array.
+    const CAL_MAX_PROCESS = 1000;
+    let createAttempts = 0, createLimit = Math.min(desired.size, CAL_MAX_PROCESS);
 
     for(const [id, s] of desired){
-      if(attempts++ >= maxAttempts) break;
+      if(createAttempts++ >= createLimit) break;
       if(!calReconcileSafe()) return;
       const evId = calEventId(id);
       const desiredBody = calDesiredEventBody(s);
       const existing = actual.get(id);
       if(!existing){
-        const desiredCreateBody = Object.assign({id:evId}, desiredBody);
-        console.log('[CALDIAG] CREATE branch for schedule', id, '| evId=', evId, '| request body=', JSON.stringify(desiredCreateBody));
-        const cr = await calRequest('POST', 'events', desiredCreateBody);
-        console.log('[CALDIAG] CREATE result:', cr ? ('status='+cr.status) : 'null (request failed)');
-        if(cr) cr.clone().text().then(t=>console.log('[CALDIAG] CREATE response body:', t)).catch(()=>{});
+        const cr = await calRequest('POST', 'events', Object.assign({id:evId}, desiredBody));
         if(!cr){ console.log('[Calendar] reconcile failed: create request did not complete for', evId); return; }
         if(cr.status === 401){ calMarkExpired(); return; }
         if(cr.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
@@ -4969,8 +4956,9 @@ async function runCalReconcile(){
     }
 
     if(!suspiciousEmpty){
+      let deleteAttempts = 0, deleteLimit = Math.min(actual.size, CAL_MAX_PROCESS);
       for(const [id] of actual){
-        if(attempts++ >= maxAttempts) break;
+        if(deleteAttempts++ >= deleteLimit) break;
         if(desired.has(id)) continue;
         if(!calReconcileSafe()) return;
         const dr = await calRequest('DELETE', 'events/'+calEventId(id));
