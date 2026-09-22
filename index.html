@@ -4843,12 +4843,43 @@ function calScheduleStartEnd(s){
   };
 }
 
+// Calendar reminder offsets (minutes before start), fixed by product spec
+// per Xperiencer item type — not derived from a user-configurable value.
+// Normal schedules/dated events get four progressively-closer reminders;
+// routines get only the last two. calendarSync.remind is left in the data
+// model as-is (still loaded/saved) for backward compatibility with older
+// saved data, but is no longer read when building event reminders now
+// that the offsets are fixed per type rather than a single custom value.
+const CAL_REMINDERS_SCHEDULE = [120, 30, 10, 2];
+const CAL_REMINDERS_ROUTINE  = [10, 2];
+
+function calReminderOverrides(isRoutineItem){
+  const mins = isRoutineItem ? CAL_REMINDERS_ROUTINE : CAL_REMINDERS_SCHEDULE;
+  return mins.map(m=>({method:'popup', minutes:m}));
+}
+
+// Order-independent comparison key for a reminders.overrides array, so
+// reconciliation isn't fooled by Google returning the overrides in a
+// different order than they were submitted in.
+function calRemindersKey(overrides){
+  return (overrides||[])
+    .map(o=>((o&&o.method)||'popup')+':'+((o&&o.minutes!=null)?o.minutes:''))
+    .sort()
+    .join(',');
+}
+
 function calDesiredEventBody(s){
   const {start, end} = calScheduleStartEnd(s);
+  // Forward-compatible: the `schedules` array synced here today never
+  // carries `_type`, so this is always false in current production —
+  // normal schedules/dated events get the 4-reminder set. If routines are
+  // ever synced through this same path in a future phase, an item tagged
+  // _type:'routine' will automatically get the 2-reminder set instead.
+  const isRoutineItem = s._type === 'routine';
   return {
     summary: s.title, start, end,
-    reminders: {useDefault:false, overrides:[{method:'popup', minutes:(calendarSync.remind&&calendarSync.remind[0])||10}]},
-    extendedProperties: {private: {xpr:'1', xprType:'schedule', xprId:s.id}}
+    reminders: {useDefault:false, overrides: calReminderOverrides(isRoutineItem)},
+    extendedProperties: {private: {xpr:'1', xprType: isRoutineItem ? 'routine' : 'schedule', xprId:s.id}}
   };
 }
 
@@ -4864,9 +4895,30 @@ function calScheduleIneligible(s){
   return new Date() < start;
 }
 
+// Same rule as calScheduleIneligible, for a routine's occurrence on a given
+// date — routines track their own per-occurrence done state in
+// `completions` (keyed the same way as doneSchedules: `id_date`) rather
+// than `doneSchedules`.
+function calRoutineIneligible(r, ds){
+  const key = r.id+'_'+ds;
+  if(completions[key] !== true) return false;
+  const start = dsToDate(ds);
+  const [h,m] = (r.time||'0:0').split(':').map(Number);
+  start.setHours(h,m,0,0);
+  return new Date() < start;
+}
+
 // Google event-ID restriction: lowercase letters a-v and digits 0-9 only,
-// 5-1024 chars. Our uid()s are digit-only, so this is a no-op sanitizer.
-function calEventId(scheduleId){ return 's'+String(scheduleId).replace(/[^a-v0-9]/gi,'').toLowerCase(); }
+// 5-1024 chars. Our uid()s are digit-only, so the sanitizer is a no-op on
+// the id itself. Schedule events keep the original 's' prefix (unchanged,
+// so already-synced schedule events keep the exact same Calendar event
+// IDs as before); routine occurrence events get a distinct 'r' prefix, so
+// the two kinds' deterministic IDs can never collide with each other even
+// if the underlying raw ids were ever identical.
+function calEventId(id, kind){
+  const prefix = kind === 'routine' ? 'r' : 's';
+  return prefix + String(id).replace(/[^a-v0-9]/gi,'').toLowerCase();
+}
 
 async function runCalReconcile(){
   if(calReconcileInFlight){
@@ -4887,20 +4939,63 @@ async function runCalReconcile(){
       desired.set(s.id, s);
     });
 
-    const res = await calRequest('GET', 'events?privateExtendedProperty=' + encodeURIComponent('xpr=1') + '&showDeleted=false&singleEvents=true&maxResults=2500');
-    if(!res){ console.log('[Calendar] reconcile failed: could not list events'); return; } // abort/timeout/network — already logged by calRequest
-
-    if(res.status === 401){ calMarkExpired(); return; }
-    if(res.status === 403){ showToast('Google Calendar permission problem — try reconnecting'); return; }
-    if(res.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
-    if(!res.ok){ calLogUnexpected(res, 'GET', 'events'); return; }
-
-    const body = await res.json();
-    const actual = new Map();
-    (body.items||[]).forEach(ev=>{
-      const p = ev.extendedProperties && ev.extendedProperties.private;
-      if(p && p.xpr==='1' && p.xprType==='schedule' && p.xprId) actual.set(p.xprId, ev);
+    // Routines are recurring definitions, not individually-dated items —
+    // there is one Calendar event per routine per day it's due, generated
+    // fresh each reconciliation for "today" only (matching how the rest of
+    // the app already treats routines as a rolling daily occurrence, e.g.
+    // the Routine tab's today-list and runAlertCheck's missed-state scan —
+    // both key a routine's per-day state as `r.id+'_'+today`). Yesterday's
+    // occurrence naturally drops out of `desired` the next day and its
+    // Calendar event is then cleaned up by the existing orphan-delete pass
+    // below — no separate expiry logic needed.
+    const calToday = todayStr();
+    routines.forEach(r=>{
+      if(!r.time) return; // no start time — nothing to remind about
+      if(!routineAppliesOn(r, calToday)) return;
+      if(calRoutineIneligible(r, calToday)) return;
+      const occId = r.id+'_'+calToday;
+      desired.set(occId, {id:occId, _type:'routine', title:r.title, date:calToday, time:r.time, dur:r.dur||30});
     });
+
+    // Page through the full Calendar listing before doing anything
+    // destructive — a single page (even at maxResults=2500) is not
+    // guaranteed to contain every Xperiencer-owned event once the
+    // account has more events than fit in one response.
+    const actual = new Map();
+    let pageToken = undefined;
+    let pageCount = 0;
+    const CAL_MAX_PAGES = 50; // defensive backstop against unexpected/runaway pagination
+    do{
+      const qs = 'events?privateExtendedProperty=' + encodeURIComponent('xpr=1') + '&showDeleted=false&singleEvents=true&maxResults=2500'
+        + (pageToken ? '&pageToken=' + encodeURIComponent(pageToken) : '');
+      const res = await calRequest('GET', qs);
+      if(!res){ console.log('[Calendar] reconcile failed: could not list events'); return; } // abort/timeout/network — already logged by calRequest
+
+      if(res.status === 401){ calMarkExpired(); return; }
+      if(res.status === 403){ showToast('Google Calendar permission problem — try reconnecting'); return; }
+      if(res.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
+      if(!res.ok){ calLogUnexpected(res, 'GET', 'events'); return; }
+
+      const body = await res.json();
+      pageCount++;
+      (body.items||[]).forEach(ev=>{
+        const p = ev.extendedProperties && ev.extendedProperties.private;
+        if(p && p.xpr==='1' && (p.xprType==='schedule' || p.xprType==='routine') && p.xprId) actual.set(p.xprId, ev);
+      });
+      pageToken = body.nextPageToken || null;
+    } while(pageToken && pageCount < CAL_MAX_PAGES);
+
+    if(pageToken){
+      // Hit CAL_MAX_PAGES while Google still had more pages to give us —
+      // `actual` is an incomplete listing at this point. Reconciling
+      // against an incomplete `actual` risks false "missing" creates and
+      // false "orphaned" deletes, so abort this pass entirely rather than
+      // touch Calendar with partial data. A later reconciliation (the
+      // normal debounce/queue triggers) will retry from page 1.
+      console.log('[Calendar] reconcile aborted: pagination incomplete after', pageCount, 'pages — nextPageToken still present');
+      return;
+    }
+    console.log('[Calendar] listing complete: pages=', pageCount, 'xpr events=', actual.size);
 
     if(!calReconcileSafe()) return; // re-check right before anything destructive
 
@@ -4909,20 +5004,21 @@ async function runCalReconcile(){
     // treated as a possible transitional/bug state, not a real mass
     // deletion — skip the delete pass entirely this round.
     const suspiciousEmpty = desired.size === 0 && actual.size > 3;
-    // Runaway guard: each loop gets its own counter, capped at the size of
-    // the collection it's actually iterating (so every legitimate item is
-    // always reachable) with a high absolute ceiling on top purely as a
-    // defensive backstop against a corrupted/pathological schedules array.
+    // Runaway guard: CAL_MAX_PROCESS bounds actual Calendar writes per
+    // pass. An item that's already correct costs a Map lookup only and is
+    // never counted, so a large collection of already-synced schedules
+    // can never prevent a create/update further along in `desired` from
+    // being reached — the cap only ever throttles genuine write bursts.
     const CAL_MAX_PROCESS = 1000;
-    let createAttempts = 0, createLimit = Math.min(desired.size, CAL_MAX_PROCESS);
+    let createWrites = 0;
 
     for(const [id, s] of desired){
-      if(createAttempts++ >= createLimit) break;
       if(!calReconcileSafe()) return;
-      const evId = calEventId(id);
+      const evId = calEventId(id, s._type);
       const desiredBody = calDesiredEventBody(s);
       const existing = actual.get(id);
       if(!existing){
+        if(createWrites++ >= CAL_MAX_PROCESS) break;
         const cr = await calRequest('POST', 'events', Object.assign({id:evId}, desiredBody));
         if(!cr){ console.log('[Calendar] reconcile failed: create request did not complete for', evId); return; }
         if(cr.status === 401){ calMarkExpired(); return; }
@@ -4939,8 +5035,9 @@ async function runCalReconcile(){
       const needsPatch = existing.summary !== desiredBody.summary
         || !existing.start || existing.start.dateTime !== desiredBody.start.dateTime || existing.start.timeZone !== desiredBody.start.timeZone
         || !existing.end || existing.end.dateTime !== desiredBody.end.dateTime || existing.end.timeZone !== desiredBody.end.timeZone
-        || JSON.stringify((existing.reminders&&existing.reminders.overrides)||[]) !== JSON.stringify(desiredBody.reminders.overrides);
+        || calRemindersKey((existing.reminders&&existing.reminders.overrides)) !== calRemindersKey(desiredBody.reminders.overrides);
       if(needsPatch){
+        if(createWrites++ >= CAL_MAX_PROCESS) break;
         const pr = await calRequest('PATCH', 'events/'+evId, desiredBody);
         if(!pr){ console.log('[Calendar] reconcile failed: patch request did not complete for', evId); return; }
         if(pr.status === 401){ calMarkExpired(); return; }
@@ -4956,19 +5053,21 @@ async function runCalReconcile(){
     }
 
     if(!suspiciousEmpty){
-      let deleteAttempts = 0, deleteLimit = Math.min(actual.size, CAL_MAX_PROCESS);
-      for(const [id] of actual){
-        if(deleteAttempts++ >= deleteLimit) break;
+      let deleteWrites = 0;
+      for(const [id, ev] of actual){
         if(desired.has(id)) continue;
+        if(deleteWrites++ >= CAL_MAX_PROCESS) break;
         if(!calReconcileSafe()) return;
-        const dr = await calRequest('DELETE', 'events/'+calEventId(id));
+        const p = ev.extendedProperties && ev.extendedProperties.private;
+        const evId = calEventId(id, p && p.xprType);
+        const dr = await calRequest('DELETE', 'events/'+evId);
         if(!dr){ console.log('[Calendar] reconcile failed: delete request did not complete for', id); return; }
         if(dr.status === 401){ calMarkExpired(); return; }
         if(dr.status === 429){ calBackoffUntil = Date.now()+30000; scheduleCalReconcile(30000); return; }
         else if(!dr.ok && dr.status!==404 && dr.status!==410){
           // 404/410 just mean it's already gone — fine. Anything else is
           // unexpected; log it but don't treat the delete as done.
-          calLogUnexpected(dr, 'DELETE', 'events/'+calEventId(id));
+          calLogUnexpected(dr, 'DELETE', 'events/'+evId);
         }
       }
     }
