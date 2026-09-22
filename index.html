@@ -4484,6 +4484,7 @@ async function saveRoutine(){
   renderRoutine();renderSchStrip();renderCalView();
   renderEvents();
   driveSaveData();
+  scheduleCalReconcile();
 }
 
 async function deleteRoutine(){
@@ -4493,6 +4494,7 @@ async function deleteRoutine(){
   document.getElementById('routine-overlay').classList.remove('open');
   renderRoutine();renderSchStrip();renderCalView();renderEvents();
   showToast('Routine deleted');
+  scheduleCalReconcile();
 }
 
 // ══════════════════════════════════════
